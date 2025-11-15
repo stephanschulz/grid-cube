@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grid Cube Deformation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #1a1a1a;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        
+        #canvas {
+            background: #f5f5f5;
+            box-shadow: 0 10px 50px rgba(0, 0, 0, 0.5);
+        }
+        
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            min-width: 250px;
+        }
+        
+        .controls h2 {
+            margin: 0 0 15px 0;
+            font-size: 18px;
+            color: #333;
+        }
+        
+        .control-group {
+            margin-bottom: 15px;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #555;
+        }
+        
+        .control-group input[type="range"] {
+            width: 100%;
+        }
+        
+        .control-group button {
+            width: 100%;
+            padding: 10px;
+            background: #333;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        
+        .control-group button:hover {
+            background: #555;
+        }
+        
+        .value-display {
+            display: inline-block;
+            float: right;
+            font-weight: bold;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    
+    <div class="controls">
+        <h2>Grid Cube Controls</h2>
+        
+        <div class="control-group">
+            <label>
+                Rotation Speed
+                <span class="value-display" id="speedValue">1.0x</span>
+            </label>
+            <input type="range" id="speedSlider" min="0" max="3" step="0.1" value="1">
+        </div>
+        
+        <div class="control-group">
+            <label>
+                Grid Density
+                <span class="value-display" id="densityValue">30</span>
+            </label>
+            <input type="range" id="densitySlider" min="15" max="60" step="5" value="30">
+        </div>
+        
+        <div class="control-group">
+            <label>
+                Deformation Strength
+                <span class="value-display" id="deformValue">1.0x</span>
+            </label>
+            <input type="range" id="deformSlider" min="0" max="2" step="0.1" value="1">
+        </div>
+        
+        <div class="control-group">
+            <label>
+                Cube Size
+                <span class="value-display" id="sizeValue">200</span>
+            </label>
+            <input type="range" id="sizeSlider" min="100" max="400" step="20" value="200">
+        </div>
+        
+        <div class="control-group">
+            <label>
+                Grid Alpha
+                <span class="value-display" id="gridAlphaValue">1.0</span>
+            </label>
+            <input type="range" id="gridAlphaSlider" min="0" max="1" step="0.1" value="1">
+        </div>
+        
+        <div class="control-group">
+            <label>
+                Cube Alpha
+                <span class="value-display" id="cubeAlphaValue">1.0</span>
+            </label>
+            <input type="range" id="cubeAlphaSlider" min="0" max="1" step="0.1" value="1">
+        </div>
+        
+        <div class="control-group">
+            <button id="viewToggleBtn">Switch to Orthographic</button>
+        </div>
+        
+        <div class="control-group">
+            <button id="pauseBtn">Pause Animation</button>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
+
