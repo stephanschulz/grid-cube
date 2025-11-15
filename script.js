@@ -105,12 +105,12 @@ function createGridLayers() {
             const cubeSize = config.cubeSize; // Actual cube size in grid units
             const influenceDistance = config.gridDensity * (config.influenceRadius / 100); // Additional falloff distance
             
-            if (gridDistance < cubeSize) {
+            if (gridDistance <= cubeSize - 1) {
                 // Inside the cube - full displacement
                 zPull = config.zSeparation;
-            } else if (gridDistance < cubeSize + influenceDistance) {
+            } else if (influenceDistance > 0 && gridDistance <= cubeSize - 1 + influenceDistance) {
                 // In the falloff zone - smooth transition
-                const distanceFromCube = gridDistance - cubeSize;
+                const distanceFromCube = gridDistance - (cubeSize - 1);
                 const normalizedDist = distanceFromCube / influenceDistance;
                 const falloff = (Math.cos(normalizedDist * Math.PI) + 1) / 2;
                 zPull = config.zSeparation * falloff;
@@ -170,8 +170,7 @@ function drawDualGrid() {
         const dx = Math.abs(i - config.selectedPointX);
         const dy = Math.abs(j - config.selectedPointY);
         
-        // Point is on cube edge if it's inside the cube AND on the perimeter
-        // The perimeter is where max(dx, dy) === cubeSize - 1
+        // Point is on cube edge if it's on the perimeter at cubeSize - 1
         const maxDist = Math.max(dx, dy);
         return maxDist === config.cubeSize - 1;
     };
@@ -181,7 +180,7 @@ function drawDualGrid() {
         const dx = Math.abs(i - config.selectedPointX);
         const dy = Math.abs(j - config.selectedPointY);
         const gridDistance = Math.max(dx, dy);
-        return gridDistance < config.cubeSize;
+        return gridDistance <= config.cubeSize - 1;
     };
     
     // Draw connecting lines for points with significant pull
@@ -339,12 +338,12 @@ function drawDualGrid() {
                         
                         let isInFootprint = false;
                         
-                        if (xyDist < cubeSize) {
+                        if (xyDist <= cubeSize - 1) {
                             // Inside cube - always in footprint at full height
                             isInFootprint = zOffset <= Math.abs(config.zSeparation);
-                        } else if (influenceDistance > 0 && xyDist < cubeSize + influenceDistance) {
+                        } else if (influenceDistance > 0 && xyDist <= cubeSize - 1 + influenceDistance) {
                             // In stretched region - check if Z level is within this point's displacement
-                            const distFromCube = xyDist - cubeSize;
+                            const distFromCube = xyDist - (cubeSize - 1);
                             const normalizedDist = distFromCube / influenceDistance;
                             const falloff = (Math.cos(normalizedDist * Math.PI) + 1) / 2;
                             const maxZForThisPoint = Math.abs(config.zSeparation) * falloff;
