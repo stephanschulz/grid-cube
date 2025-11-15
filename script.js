@@ -5,18 +5,32 @@ const ctx = canvas.getContext('2d');
 canvas.width = 1000;
 canvas.height = 1000;
 
+// Load configuration from localStorage or use defaults
+function loadConfig() {
+    const saved = localStorage.getItem('gridCubeConfig');
+    if (saved) {
+        return JSON.parse(saved);
+    }
+    return {
+        gridDensity: 20,
+        selectedPointX: 10,
+        selectedPointY: 10,
+        zSeparation: 200,
+        influenceRadius: 60, // Percentage of grid density
+        backGridAlpha: 0.5,
+        frontGridAlpha: 1.0,
+        connectionAlpha: 0.4,
+        usePerspective: true
+    };
+}
+
+// Save configuration to localStorage
+function saveConfig() {
+    localStorage.setItem('gridCubeConfig', JSON.stringify(config));
+}
+
 // Configuration
-let config = {
-    gridDensity: 20,
-    selectedPointX: 10,
-    selectedPointY: 10,
-    zSeparation: 200,
-    influenceRadius: 60, // Percentage of grid density
-    backGridAlpha: 0.5,
-    frontGridAlpha: 1.0,
-    connectionAlpha: 0.4,
-    usePerspective: true
-};
+let config = loadConfig();
 
 // 3D to 2D projection
 function project3D(x, y, z) {
@@ -261,54 +275,93 @@ function updatePointSliderMax() {
     }
 }
 
+// Initialize UI from config
+function initializeUI() {
+    document.getElementById('densitySlider').value = config.gridDensity;
+    document.getElementById('densityValue').textContent = config.gridDensity;
+    
+    document.getElementById('pointXSlider').value = config.selectedPointX;
+    document.getElementById('pointXValue').textContent = config.selectedPointX;
+    
+    document.getElementById('pointYSlider').value = config.selectedPointY;
+    document.getElementById('pointYValue').textContent = config.selectedPointY;
+    
+    document.getElementById('zSeparationSlider').value = config.zSeparation;
+    document.getElementById('zSeparationValue').textContent = config.zSeparation;
+    
+    document.getElementById('influenceRadiusSlider').value = config.influenceRadius;
+    document.getElementById('influenceRadiusValue').textContent = config.influenceRadius + '%';
+    
+    document.getElementById('backGridAlphaSlider').value = config.backGridAlpha;
+    document.getElementById('backGridAlphaValue').textContent = config.backGridAlpha.toFixed(1);
+    
+    document.getElementById('frontGridAlphaSlider').value = config.frontGridAlpha;
+    document.getElementById('frontGridAlphaValue').textContent = config.frontGridAlpha.toFixed(1);
+    
+    document.getElementById('connectionAlphaSlider').value = config.connectionAlpha;
+    document.getElementById('connectionAlphaValue').textContent = config.connectionAlpha.toFixed(1);
+    
+    document.getElementById('viewToggleBtn').textContent = config.usePerspective ? 'Switch to Orthographic' : 'Switch to Perspective';
+}
+
 // Controls
 document.getElementById('densitySlider').addEventListener('input', (e) => {
     config.gridDensity = parseInt(e.target.value);
     document.getElementById('densityValue').textContent = config.gridDensity;
     updatePointSliderMax();
+    saveConfig();
 });
 
 document.getElementById('pointXSlider').addEventListener('input', (e) => {
     config.selectedPointX = parseInt(e.target.value);
     document.getElementById('pointXValue').textContent = config.selectedPointX;
+    saveConfig();
 });
 
 document.getElementById('pointYSlider').addEventListener('input', (e) => {
     config.selectedPointY = parseInt(e.target.value);
     document.getElementById('pointYValue').textContent = config.selectedPointY;
+    saveConfig();
 });
 
 document.getElementById('zSeparationSlider').addEventListener('input', (e) => {
     config.zSeparation = parseInt(e.target.value);
     document.getElementById('zSeparationValue').textContent = config.zSeparation;
+    saveConfig();
 });
 
 document.getElementById('influenceRadiusSlider').addEventListener('input', (e) => {
     config.influenceRadius = parseInt(e.target.value);
     document.getElementById('influenceRadiusValue').textContent = config.influenceRadius + '%';
+    saveConfig();
 });
 
 document.getElementById('backGridAlphaSlider').addEventListener('input', (e) => {
     config.backGridAlpha = parseFloat(e.target.value);
     document.getElementById('backGridAlphaValue').textContent = config.backGridAlpha.toFixed(1);
+    saveConfig();
 });
 
 document.getElementById('frontGridAlphaSlider').addEventListener('input', (e) => {
     config.frontGridAlpha = parseFloat(e.target.value);
     document.getElementById('frontGridAlphaValue').textContent = config.frontGridAlpha.toFixed(1);
+    saveConfig();
 });
 
 document.getElementById('connectionAlphaSlider').addEventListener('input', (e) => {
     config.connectionAlpha = parseFloat(e.target.value);
     document.getElementById('connectionAlphaValue').textContent = config.connectionAlpha.toFixed(1);
+    saveConfig();
 });
 
 document.getElementById('viewToggleBtn').addEventListener('click', (e) => {
     config.usePerspective = !config.usePerspective;
     e.target.textContent = config.usePerspective ? 'Switch to Orthographic' : 'Switch to Perspective';
+    saveConfig();
 });
 
 // Initialize
+initializeUI();
 updatePointSliderMax();
 
 // Start render loop
