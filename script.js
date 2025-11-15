@@ -164,16 +164,6 @@ function drawDualGrid() {
         ctx.stroke();
     }
     
-    // Draw back grid points
-    ctx.fillStyle = `rgba(51, 51, 51, ${config.backGridAlpha * 0.8})`;
-    for (let i = 0; i <= config.gridDensity; i++) {
-        for (let j = 0; j <= config.gridDensity; j++) {
-            const point = backGrid[i][j].pos2D;
-            ctx.beginPath();
-            ctx.arc(point.x, point.y, 2, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    }
     
     // Helper function to check if a point is on the edge of the CUBE (not the displaced region)
     const isOnCubeEdge = (i, j) => {
@@ -233,17 +223,6 @@ function drawDualGrid() {
         ctx.lineTo(frontPoint.x, frontPoint.y);
         ctx.stroke();
         
-        // Highlight the selected back point
-        ctx.fillStyle = `rgba(51, 51, 51, ${config.backGridAlpha})`;
-        ctx.beginPath();
-        ctx.arc(backPoint.x, backPoint.y, 5, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Highlight the pulled/pushed front point
-        ctx.fillStyle = `rgba(51, 51, 51, ${config.frontGridAlpha})`;
-        ctx.beginPath();
-        ctx.arc(frontPoint.x, frontPoint.y, 7, 0, Math.PI * 2);
-        ctx.fill();
     }
     
     // Helper to check if point is in stretched region (outside cube but has displacement)
@@ -285,18 +264,6 @@ function drawDualGrid() {
         }
     }
     
-    // Draw front grid points - only inside the cube
-    ctx.fillStyle = `rgba(51, 51, 51, ${config.frontGridAlpha})`;
-    for (let i = 0; i <= config.gridDensity; i++) {
-        for (let j = 0; j <= config.gridDensity; j++) {
-            if (isInsideCube(i, j)) {
-                const point = frontGrid[i][j].pos2D;
-                ctx.beginPath();
-                ctx.arc(point.x, point.y, 2.5, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        }
-    }
     
     // Draw stretched cloth region (if influence distance > 0)
     if (config.influenceRadius > 0) {
@@ -333,18 +300,6 @@ function drawDualGrid() {
             }
         }
         
-        // Stretched region points
-        ctx.fillStyle = `rgba(51, 51, 51, ${config.backGridAlpha})`;
-        for (let i = 0; i <= config.gridDensity; i++) {
-            for (let j = 0; j <= config.gridDensity; j++) {
-                if (isInStretchedRegion(i, j)) {
-                    const point = frontGrid[i][j].pos2D;
-                    ctx.beginPath();
-                    ctx.arc(point.x, point.y, 2.5, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            }
-        }
     }
     
     // Draw 3D grid structure - intermediate horizontal slices at uniform spacing
