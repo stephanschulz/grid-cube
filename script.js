@@ -7,20 +7,14 @@ canvas.height = 1000;
 
 // Configuration
 let config = {
-    gridDensity: 30,
-    cubeSize: 200,
-    rotationSpeed: 1,
-    deformationStrength: 1,
+    gridDensity: 20,
+    selectedPointX: 10,
+    selectedPointY: 10,
+    zSeparation: 200,
     gridAlpha: 1,
-    cubeAlpha: 1,
-    isPaused: false,
+    cubeAlpha: 0, // Not used for now
     usePerspective: true
 };
-
-// Rotation angles
-let angleX = 0;
-let angleY = 0;
-let angleZ = 0;
 
 // 3D to 2D projection
 function project3D(x, y, z) {
@@ -30,6 +24,7 @@ function project3D(x, y, z) {
         return {
             x: x * scale + canvas.width / 2,
             y: y * scale + canvas.height / 2,
+            z: z,
             scale: scale
         };
     } else {
@@ -37,197 +32,79 @@ function project3D(x, y, z) {
         return {
             x: x + canvas.width / 2,
             y: y + canvas.height / 2,
+            z: z,
             scale: 1
         };
     }
 }
 
-// Rotate point in 3D space
-function rotate3D(x, y, z, ax, ay, az) {
-    // Rotate around X axis
-    let tempY = y * Math.cos(ax) - z * Math.sin(ax);
-    let tempZ = y * Math.sin(ax) + z * Math.cos(ax);
-    y = tempY;
-    z = tempZ;
+// Create grid points for both layers
+function createGridLayers() {
+    const spacing = 700 / config.gridDensity;
+    const backZ = -400;
     
-    // Rotate around Y axis
-    let tempX = x * Math.cos(ay) + z * Math.sin(ay);
-    tempZ = -x * Math.sin(ay) + z * Math.cos(ay);
-    x = tempX;
-    z = tempZ;
+    const backGrid = [];
+    const frontGrid = [];
     
-    // Rotate around Z axis
-    tempX = x * Math.cos(az) - y * Math.sin(az);
-    tempY = x * Math.sin(az) + y * Math.cos(az);
-    x = tempX;
-    y = tempY;
-    
-    return { x, y, z };
-}
-
-// Get cube vertices in 3D space
-function getCubeVertices3D() {
-    const s = config.cubeSize / 2;
-    const vertices = [
-        { x: -s, y: -s, z: -s },
-        { x:  s, y: -s, z: -s },
-        { x:  s, y:  s, z: -s },
-        { x: -s, y:  s, z: -s },
-        { x: -s, y: -s, z:  s },
-        { x:  s, y: -s, z:  s },
-        { x:  s, y:  s, z:  s },
-        { x: -s, y:  s, z:  s }
-    ];
-    
-    return vertices.map(v => rotate3D(v.x, v.y, v.z, angleX, angleY, angleZ));
-}
-
-// Get cube vertices projected to 2D
-function getCubeVertices2D() {
-    return getCubeVertices3D().map(v => project3D(v.x, v.y, v.z));
-}
-
-// Distance from point to 3D line segment
-function distanceToSegment3D(p, v1, v2) {
-    const dx = v2.x - v1.x;
-    const dy = v2.y - v1.y;
-    const dz = v2.z - v1.z;
-    
-    const px = p.x - v1.x;
-    const py = p.y - v1.y;
-    const pz = p.z - v1.z;
-    
-    const dot = px * dx + py * dy + pz * dz;
-    const lenSq = dx * dx + dy * dy + dz * dz;
-    
-    let param = -1;
-    if (lenSq !== 0) param = dot / lenSq;
-    
-    param = Math.max(0, Math.min(1, param));
-    
-    const closestX = v1.x + param * dx;
-    const closestY = v1.y + param * dy;
-    const closestZ = v1.z + param * dz;
-    
-    const distX = p.x - closestX;
-    const distY = p.y - closestY;
-    const distZ = p.z - closestZ;
-    
-    return {
-        distance: Math.sqrt(distX * distX + distY * distY + distZ * distZ),
-        closest: { x: closestX, y: closestY, z: closestZ }
-    };
-}
-
-// Deform a 3D grid point based on the cube
-function deformGridPoint3D(gridX, gridY, gridZ) {
-    const cubeVertices = getCubeVertices3D();
-    const edges = [
-        [0, 1], [1, 2], [2, 3], [3, 0], // back face
-        [4, 5], [5, 6], [6, 7], [7, 4], // front face
-        [0, 4], [1, 5], [2, 6], [3, 7]  // connecting edges
-    ];
-    
-    let deformedPoint = { x: gridX, y: gridY, z: gridZ };
-    let totalInfluence = 0;
-    let totalDisplacement = { x: 0, y: 0, z: 0 };
-    
-    // Calculate influence from each edge
-    edges.forEach(edge => {
-        const v1 = cubeVertices[edge[0]];
-        const v2 = cubeVertices[edge[1]];
-        
-        const result = distanceToSegment3D(deformedPoint, v1, v2);
-        const dist = result.distance;
-        
-        // Influence falls off with distance
-        const maxInfluenceDist = 300;
-        if (dist < maxInfluenceDist) {
-            const influence = Math.pow(1 - dist / maxInfluenceDist, 2) * config.deformationStrength;
-            
-            // Calculate displacement direction (from grid point towards edge)
-            const dirX = result.closest.x - gridX;
-            const dirY = result.closest.y - gridY;
-            const dirZ = result.closest.z - gridZ;
-            
-            const dirLength = Math.sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
-            if (dirLength > 0) {
-                const normalizedX = dirX / dirLength;
-                const normalizedY = dirY / dirLength;
-                const normalizedZ = dirZ / dirLength;
-                
-                // Push the grid point towards the cube edge
-                const pushAmount = influence * 80;
-                totalDisplacement.x += normalizedX * pushAmount;
-                totalDisplacement.y += normalizedY * pushAmount;
-                totalDisplacement.z += normalizedZ * pushAmount;
-                totalInfluence += influence;
-            }
-        }
-    });
-    
-    // Apply accumulated displacement
-    if (totalInfluence > 0) {
-        deformedPoint.x += totalDisplacement.x;
-        deformedPoint.y += totalDisplacement.y;
-        deformedPoint.z += totalDisplacement.z;
-    }
-    
-    // Add influence from cube center (attraction/repulsion)
-    const centerX = 0;
-    const centerY = 0;
-    const centerZ = 0;
-    
-    const toCenterX = centerX - gridX;
-    const toCenterY = centerY - gridY;
-    const toCenterZ = centerZ - gridZ;
-    const distToCenter = Math.sqrt(toCenterX * toCenterX + toCenterY * toCenterY + toCenterZ * toCenterZ);
-    
-    if (distToCenter < config.cubeSize * 1.5 && distToCenter > 0) {
-        const centerInfluence = Math.pow(1 - distToCenter / (config.cubeSize * 1.5), 2) * config.deformationStrength;
-        const pullAmount = centerInfluence * 30;
-        
-        deformedPoint.x += (toCenterX / distToCenter) * pullAmount;
-        deformedPoint.y += (toCenterY / distToCenter) * pullAmount;
-        deformedPoint.z += (toCenterZ / distToCenter) * pullAmount;
-    }
-    
-    return deformedPoint;
-}
-
-// Draw deformed grid
-function drawGrid() {
-    const alpha = config.gridAlpha;
-    ctx.strokeStyle = `rgba(51, 51, 51, ${alpha})`;
-    ctx.lineWidth = 2;
-    
-    const spacing = canvas.width / config.gridDensity;
-    const gridZ = -400; // Position the grid in 3D space
-    
-    // Create 3D grid points and deform them
-    const gridPoints = [];
     for (let i = 0; i <= config.gridDensity; i++) {
-        gridPoints[i] = [];
+        backGrid[i] = [];
+        frontGrid[i] = [];
+        
         for (let j = 0; j <= config.gridDensity; j++) {
-            // Convert 2D grid position to 3D coordinates
-            const x = (i - config.gridDensity / 2) * (canvas.width / config.gridDensity);
-            const y = (j - config.gridDensity / 2) * (canvas.height / config.gridDensity);
-            const z = gridZ;
+            const x = (i - config.gridDensity / 2) * spacing;
+            const y = (j - config.gridDensity / 2) * spacing;
             
-            // Deform the 3D point based on cube
-            const deformed = deformGridPoint3D(x, y, z);
+            // Back grid point (always fixed)
+            const backPoint3D = { x, y, z: backZ };
+            backGrid[i][j] = {
+                pos3D: backPoint3D,
+                pos2D: project3D(backPoint3D.x, backPoint3D.y, backPoint3D.z)
+            };
             
-            // Project to 2D
-            const projected = project3D(deformed.x, deformed.y, deformed.z);
-            gridPoints[i][j] = projected;
+            // Front grid point - calculate distance-based pull (tent effect)
+            let zPull = 0;
+            
+            // Calculate grid distance from selected point
+            const dx = i - config.selectedPointX;
+            const dy = j - config.selectedPointY;
+            const gridDistance = Math.sqrt(dx * dx + dy * dy);
+            
+            // Influence radius in grid units
+            const influenceRadius = config.gridDensity * 0.6;
+            
+            if (gridDistance < influenceRadius) {
+                // Smooth falloff using cosine interpolation
+                const normalizedDist = gridDistance / influenceRadius;
+                const falloff = (Math.cos(normalizedDist * Math.PI) + 1) / 2;
+                zPull = config.zSeparation * falloff;
+            }
+            
+            const frontPoint3D = { x, y, z: backZ + zPull };
+            frontGrid[i][j] = {
+                pos3D: frontPoint3D,
+                pos2D: project3D(frontPoint3D.x, frontPoint3D.y, frontPoint3D.z),
+                pull: zPull
+            };
         }
     }
     
-    // Draw vertical lines
+    return { backGrid, frontGrid };
+}
+
+// Draw the dual-layer grid system
+function drawDualGrid() {
+    const { backGrid, frontGrid } = createGridLayers();
+    const alpha = config.gridAlpha;
+    
+    // Draw back grid (lighter gray)
+    ctx.strokeStyle = `rgba(150, 150, 150, ${alpha * 0.5})`;
+    ctx.lineWidth = 1.5;
+    
+    // Back grid vertical lines
     for (let i = 0; i <= config.gridDensity; i++) {
         ctx.beginPath();
         for (let j = 0; j <= config.gridDensity; j++) {
-            const point = gridPoints[i][j];
+            const point = backGrid[i][j].pos2D;
             if (j === 0) {
                 ctx.moveTo(point.x, point.y);
             } else {
@@ -237,11 +114,11 @@ function drawGrid() {
         ctx.stroke();
     }
     
-    // Draw horizontal lines
+    // Back grid horizontal lines
     for (let j = 0; j <= config.gridDensity; j++) {
         ctx.beginPath();
         for (let i = 0; i <= config.gridDensity; i++) {
-            const point = gridPoints[i][j];
+            const point = backGrid[i][j].pos2D;
             if (i === 0) {
                 ctx.moveTo(point.x, point.y);
             } else {
@@ -250,79 +127,159 @@ function drawGrid() {
         }
         ctx.stroke();
     }
-}
-
-// Draw cube wireframe
-function drawCube() {
-    const alpha = config.cubeAlpha;
-    const vertices = getCubeVertices2D();
-    const edges = [
-        [0, 1], [1, 2], [2, 3], [3, 0],
-        [4, 5], [5, 6], [6, 7], [7, 4],
-        [0, 4], [1, 5], [2, 6], [3, 7]
-    ];
     
-    ctx.strokeStyle = `rgba(255, 107, 107, ${alpha})`;
-    ctx.lineWidth = 3;
+    // Draw back grid points
+    ctx.fillStyle = `rgba(150, 150, 150, ${alpha * 0.6})`;
+    for (let i = 0; i <= config.gridDensity; i++) {
+        for (let j = 0; j <= config.gridDensity; j++) {
+            const point = backGrid[i][j].pos2D;
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
     
-    edges.forEach(edge => {
-        const v1 = vertices[edge[0]];
-        const v2 = vertices[edge[1]];
+    // Draw connecting lines for points with significant pull
+    if (config.zSeparation > 0) {
+        ctx.strokeStyle = `rgba(100, 150, 255, ${alpha * 0.4})`;
+        ctx.lineWidth = 1;
         
+        for (let i = 0; i <= config.gridDensity; i++) {
+            for (let j = 0; j <= config.gridDensity; j++) {
+                if (frontGrid[i][j].pull > 5) {
+                    const backPoint = backGrid[i][j].pos2D;
+                    const frontPoint = frontGrid[i][j].pos2D;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(backPoint.x, backPoint.y);
+                    ctx.lineTo(frontPoint.x, frontPoint.y);
+                    ctx.stroke();
+                }
+            }
+        }
+        
+        // Highlight the selected point with thicker line
+        const i = config.selectedPointX;
+        const j = config.selectedPointY;
+        
+        const backPoint = backGrid[i][j].pos2D;
+        const frontPoint = frontGrid[i][j].pos2D;
+        
+        ctx.strokeStyle = `rgba(255, 100, 100, ${alpha * 0.8})`;
+        ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.moveTo(v1.x, v1.y);
-        ctx.lineTo(v2.x, v2.y);
+        ctx.moveTo(backPoint.x, backPoint.y);
+        ctx.lineTo(frontPoint.x, frontPoint.y);
         ctx.stroke();
-    });
-    
-    // Draw vertices
-    ctx.fillStyle = `rgba(255, 107, 107, ${alpha})`;
-    vertices.forEach(v => {
+        
+        // Highlight the selected back point
+        ctx.fillStyle = `rgba(255, 100, 100, ${alpha})`;
         ctx.beginPath();
-        ctx.arc(v.x, v.y, 4, 0, Math.PI * 2);
+        ctx.arc(backPoint.x, backPoint.y, 5, 0, Math.PI * 2);
         ctx.fill();
-    });
+        
+        // Highlight the pulled front point
+        ctx.fillStyle = `rgba(255, 50, 50, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(frontPoint.x, frontPoint.y, 7, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    // Draw front grid (darker)
+    ctx.strokeStyle = `rgba(51, 51, 51, ${alpha})`;
+    ctx.lineWidth = 2;
+    
+    // Front grid vertical lines
+    for (let i = 0; i <= config.gridDensity; i++) {
+        ctx.beginPath();
+        for (let j = 0; j <= config.gridDensity; j++) {
+            const point = frontGrid[i][j].pos2D;
+            if (j === 0) {
+                ctx.moveTo(point.x, point.y);
+            } else {
+                ctx.lineTo(point.x, point.y);
+            }
+        }
+        ctx.stroke();
+    }
+    
+    // Front grid horizontal lines
+    for (let j = 0; j <= config.gridDensity; j++) {
+        ctx.beginPath();
+        for (let i = 0; i <= config.gridDensity; i++) {
+            const point = frontGrid[i][j].pos2D;
+            if (i === 0) {
+                ctx.moveTo(point.x, point.y);
+            } else {
+                ctx.lineTo(point.x, point.y);
+            }
+        }
+        ctx.stroke();
+    }
+    
+    // Draw front grid points
+    ctx.fillStyle = `rgba(51, 51, 51, ${alpha})`;
+    for (let i = 0; i <= config.gridDensity; i++) {
+        for (let j = 0; j <= config.gridDensity; j++) {
+            const point = frontGrid[i][j].pos2D;
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
 }
 
-// Animation loop
-function animate() {
+// Render loop
+function render() {
     // Clear canvas
     ctx.fillStyle = '#f5f5f5';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Update rotation
-    if (!config.isPaused) {
-        angleX += 0.005 * config.rotationSpeed;
-        angleY += 0.008 * config.rotationSpeed;
-        angleZ += 0.003 * config.rotationSpeed;
-    }
-    
     // Draw
-    drawGrid();
-    drawCube();
+    drawDualGrid();
     
-    requestAnimationFrame(animate);
+    requestAnimationFrame(render);
+}
+
+// Update point sliders max values when grid density changes
+function updatePointSliderMax() {
+    const density = config.gridDensity;
+    document.getElementById('pointXSlider').max = density;
+    document.getElementById('pointYSlider').max = density;
+    
+    // Clamp current values if needed
+    if (config.selectedPointX > density) {
+        config.selectedPointX = density;
+        document.getElementById('pointXSlider').value = density;
+        document.getElementById('pointXValue').textContent = density;
+    }
+    if (config.selectedPointY > density) {
+        config.selectedPointY = density;
+        document.getElementById('pointYSlider').value = density;
+        document.getElementById('pointYValue').textContent = density;
+    }
 }
 
 // Controls
-document.getElementById('speedSlider').addEventListener('input', (e) => {
-    config.rotationSpeed = parseFloat(e.target.value);
-    document.getElementById('speedValue').textContent = config.rotationSpeed.toFixed(1) + 'x';
-});
-
 document.getElementById('densitySlider').addEventListener('input', (e) => {
     config.gridDensity = parseInt(e.target.value);
     document.getElementById('densityValue').textContent = config.gridDensity;
+    updatePointSliderMax();
 });
 
-document.getElementById('deformSlider').addEventListener('input', (e) => {
-    config.deformationStrength = parseFloat(e.target.value);
-    document.getElementById('deformValue').textContent = config.deformationStrength.toFixed(1) + 'x';
+document.getElementById('pointXSlider').addEventListener('input', (e) => {
+    config.selectedPointX = parseInt(e.target.value);
+    document.getElementById('pointXValue').textContent = config.selectedPointX;
 });
 
-document.getElementById('sizeSlider').addEventListener('input', (e) => {
-    config.cubeSize = parseInt(e.target.value);
-    document.getElementById('sizeValue').textContent = config.cubeSize;
+document.getElementById('pointYSlider').addEventListener('input', (e) => {
+    config.selectedPointY = parseInt(e.target.value);
+    document.getElementById('pointYValue').textContent = config.selectedPointY;
+});
+
+document.getElementById('zSeparationSlider').addEventListener('input', (e) => {
+    config.zSeparation = parseInt(e.target.value);
+    document.getElementById('zSeparationValue').textContent = config.zSeparation;
 });
 
 document.getElementById('gridAlphaSlider').addEventListener('input', (e) => {
@@ -340,10 +297,8 @@ document.getElementById('viewToggleBtn').addEventListener('click', (e) => {
     e.target.textContent = config.usePerspective ? 'Switch to Orthographic' : 'Switch to Perspective';
 });
 
-document.getElementById('pauseBtn').addEventListener('click', (e) => {
-    config.isPaused = !config.isPaused;
-    e.target.textContent = config.isPaused ? 'Resume Animation' : 'Pause Animation';
-});
+// Initialize
+updatePointSliderMax();
 
-// Start animation
-animate();
+// Start render loop
+render();
