@@ -179,12 +179,11 @@ function drawDualGrid() {
     const isOnCubeEdge = (i, j) => {
         const dx = Math.abs(i - config.selectedPointX);
         const dy = Math.abs(j - config.selectedPointY);
-        const gridDistance = Math.max(dx, dy);
         
-        // Point is on cube edge if it's at exactly cubeSize distance
-        // Check if at least one coordinate is at the boundary
-        return gridDistance < config.cubeSize && 
-               (dx === config.cubeSize - 1 || dy === config.cubeSize - 1);
+        // Point is on cube edge if it's inside the cube AND on the perimeter
+        // The perimeter is where max(dx, dy) === cubeSize - 1
+        const maxDist = Math.max(dx, dy);
+        return maxDist === config.cubeSize - 1;
     };
     
     // Helper function to check if a point is inside the cube
@@ -247,18 +246,19 @@ function drawDualGrid() {
         ctx.fill();
     }
     
-    // Helper to check if point has displacement
-    const hasDisplacement = (i, j) => Math.abs(frontGrid[i][j].pull) > 5;
+    // Helper to check if point is in stretched region (outside cube but has displacement)
+    const isInStretchedRegion = (i, j) => {
+        return !isInsideCube(i, j) && Math.abs(frontGrid[i][j].pull) > 5;
+    };
     
-    // Draw front grid - only where there's displacement (this is the top face of the cube)
+    // Draw front grid - cube face only
     ctx.strokeStyle = `rgba(51, 51, 51, ${config.frontGridAlpha})`;
     ctx.lineWidth = 2;
     
-    // Front grid vertical lines
+    // Front grid vertical lines - only inside the cube
     for (let i = 0; i <= config.gridDensity; i++) {
         for (let j = 0; j < config.gridDensity; j++) {
-            // Only draw if at least one endpoint has displacement
-            if (hasDisplacement(i, j) || hasDisplacement(i, j+1)) {
+            if (isInsideCube(i, j) && isInsideCube(i, j+1)) {
                 const point1 = frontGrid[i][j].pos2D;
                 const point2 = frontGrid[i][j+1].pos2D;
                 
@@ -270,11 +270,10 @@ function drawDualGrid() {
         }
     }
     
-    // Front grid horizontal lines
+    // Front grid horizontal lines - only inside the cube
     for (let j = 0; j <= config.gridDensity; j++) {
         for (let i = 0; i < config.gridDensity; i++) {
-            // Only draw if at least one endpoint has displacement
-            if (hasDisplacement(i, j) || hasDisplacement(i+1, j)) {
+            if (isInsideCube(i, j) && isInsideCube(i+1, j)) {
                 const point1 = frontGrid[i][j].pos2D;
                 const point2 = frontGrid[i+1][j].pos2D;
                 
@@ -286,15 +285,64 @@ function drawDualGrid() {
         }
     }
     
-    // Draw front grid points - only where there's displacement
+    // Draw front grid points - only inside the cube
     ctx.fillStyle = `rgba(51, 51, 51, ${config.frontGridAlpha})`;
     for (let i = 0; i <= config.gridDensity; i++) {
         for (let j = 0; j <= config.gridDensity; j++) {
-            if (hasDisplacement(i, j)) {
+            if (isInsideCube(i, j)) {
                 const point = frontGrid[i][j].pos2D;
                 ctx.beginPath();
                 ctx.arc(point.x, point.y, 2.5, 0, Math.PI * 2);
                 ctx.fill();
+            }
+        }
+    }
+    
+    // Draw stretched cloth region (if influence distance > 0)
+    if (config.influenceRadius > 0) {
+        ctx.strokeStyle = `rgba(51, 51, 51, ${config.backGridAlpha})`;
+        ctx.lineWidth = 2;
+        
+        // Stretched region vertical lines
+        for (let i = 0; i <= config.gridDensity; i++) {
+            for (let j = 0; j < config.gridDensity; j++) {
+                if (isInStretchedRegion(i, j) || isInStretchedRegion(i, j+1)) {
+                    const point1 = frontGrid[i][j].pos2D;
+                    const point2 = frontGrid[i][j+1].pos2D;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(point1.x, point1.y);
+                    ctx.lineTo(point2.x, point2.y);
+                    ctx.stroke();
+                }
+            }
+        }
+        
+        // Stretched region horizontal lines
+        for (let j = 0; j <= config.gridDensity; j++) {
+            for (let i = 0; i < config.gridDensity; i++) {
+                if (isInStretchedRegion(i, j) || isInStretchedRegion(i+1, j)) {
+                    const point1 = frontGrid[i][j].pos2D;
+                    const point2 = frontGrid[i+1][j].pos2D;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(point1.x, point1.y);
+                    ctx.lineTo(point2.x, point2.y);
+                    ctx.stroke();
+                }
+            }
+        }
+        
+        // Stretched region points
+        ctx.fillStyle = `rgba(51, 51, 51, ${config.backGridAlpha})`;
+        for (let i = 0; i <= config.gridDensity; i++) {
+            for (let j = 0; j <= config.gridDensity; j++) {
+                if (isInStretchedRegion(i, j)) {
+                    const point = frontGrid[i][j].pos2D;
+                    ctx.beginPath();
+                    ctx.arc(point.x, point.y, 2.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
         }
     }
@@ -318,62 +366,76 @@ function drawDualGrid() {
             const numSlices = Math.floor(maxZDisplacement / spacing);
             const backZ = -400;
             
-            // Helper function to check if a point is on the edge of the displaced region
-            const isOnEdge = (i, j) => {
-                const hasPull = Math.abs(frontGrid[i][j].pull) > 5;
-                if (!hasPull) return false;
+            // Helper to get the cube footprint at a given Z height
+            const getCubeFootprintAtZ = (targetZ, backZ) => {
+                const zOffset = Math.abs(targetZ - backZ);
                 
-                // Check if any of the 4 neighbors has no pull (meaning this is an edge)
-                const neighbors = [
-                    [i-1, j], [i+1, j], [i, j-1], [i, j+1]
-                ];
-                
-                for (const [ni, nj] of neighbors) {
-                    if (ni < 0 || ni > config.gridDensity || nj < 0 || nj > config.gridDensity) {
-                        return true; // Edge of grid
-                    }
-                    if (Math.abs(frontGrid[ni]?.[nj]?.pull || 0) <= 5) {
-                        return true; // Neighbor has no pull, so this is an edge
+                // At each Z level, determine which XY points should be part of the cube/stretched region
+                const footprint = [];
+                for (let i = 0; i <= config.gridDensity; i++) {
+                    footprint[i] = [];
+                    for (let j = 0; j <= config.gridDensity; j++) {
+                        const dx = Math.abs(i - config.selectedPointX);
+                        const dy = Math.abs(j - config.selectedPointY);
+                        const xyDist = Math.max(dx, dy);
+                        
+                        const cubeSize = config.cubeSize;
+                        const influenceDistance = config.gridDensity * (config.influenceRadius / 100);
+                        
+                        let isInFootprint = false;
+                        
+                        if (xyDist < cubeSize) {
+                            // Inside cube - always in footprint at full height
+                            isInFootprint = zOffset <= Math.abs(config.zSeparation);
+                        } else if (influenceDistance > 0 && xyDist < cubeSize + influenceDistance) {
+                            // In stretched region - check if Z level is within this point's displacement
+                            const distFromCube = xyDist - cubeSize;
+                            const normalizedDist = distFromCube / influenceDistance;
+                            const falloff = (Math.cos(normalizedDist * Math.PI) + 1) / 2;
+                            const maxZForThisPoint = Math.abs(config.zSeparation) * falloff;
+                            isInFootprint = zOffset <= maxZForThisPoint;
+                        }
+                        
+                        footprint[i][j] = isInFootprint;
                     }
                 }
-                return false;
+                return footprint;
             };
             
             // Draw intermediate horizontal grid slices
             // For each intermediate Z level at uniform spacing
             for (let slice = 1; slice <= numSlices; slice++) {
                 const sliceZOffset = slice * spacing * Math.sign(config.zSeparation); // Uniform spacing in Z
+                const targetZ = backZ + sliceZOffset;
                 
-                // Create grid points at this Z level
+                // Get the cube footprint at this Z level
+                const footprint = getCubeFootprintAtZ(targetZ, backZ);
+                
+                // Create grid points at this Z level based on footprint
                 const sliceGrid = [];
                 for (let i = 0; i <= config.gridDensity; i++) {
                     sliceGrid[i] = [];
                     for (let j = 0; j <= config.gridDensity; j++) {
                         const backPos = backGrid[i][j].pos3D;
-                        const frontPos = frontGrid[i][j].pos3D;
-                        const targetZ = backPos.z + sliceZOffset;
                         
-                        // Only include this point if it's between back and front
-                        if ((config.zSeparation > 0 && targetZ <= frontPos.z) ||
-                            (config.zSeparation < 0 && targetZ >= frontPos.z)) {
+                        if (footprint[i][j]) {
                             sliceGrid[i][j] = project3D(backPos.x, backPos.y, targetZ);
                         } else {
-                            sliceGrid[i][j] = null; // Beyond the front grid for this point
+                            sliceGrid[i][j] = null;
                         }
                     }
                 }
                 
                 // Draw vertical lines at this slice
+                ctx.strokeStyle = `rgba(51, 51, 51, ${config.interiorAlpha * 0.6})`;
+                ctx.lineWidth = 1.5;
+                
                 for (let i = 0; i <= config.gridDensity; i++) {
                     for (let j = 0; j < config.gridDensity; j++) {
                         const point1 = sliceGrid[i][j];
                         const point2 = sliceGrid[i][j+1];
                         
                         if (point1 && point2) {
-                            // All intermediate slice lines use interior alpha
-                            ctx.strokeStyle = `rgba(51, 51, 51, ${config.interiorAlpha * 0.6})`;
-                            ctx.lineWidth = 1.5;
-                            
                             ctx.beginPath();
                             ctx.moveTo(point1.x, point1.y);
                             ctx.lineTo(point2.x, point2.y);
@@ -389,10 +451,6 @@ function drawDualGrid() {
                         const point2 = sliceGrid[i+1][j];
                         
                         if (point1 && point2) {
-                            // All intermediate slice lines use interior alpha
-                            ctx.strokeStyle = `rgba(51, 51, 51, ${config.interiorAlpha * 0.6})`;
-                            ctx.lineWidth = 1.5;
-                            
                             ctx.beginPath();
                             ctx.moveTo(point1.x, point1.y);
                             ctx.lineTo(point2.x, point2.y);
