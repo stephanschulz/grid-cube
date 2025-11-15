@@ -171,6 +171,11 @@ function drawDualGrid() {
         ctx.strokeStyle = `rgba(51, 51, 51, ${config.connectionAlpha})`;
         ctx.lineWidth = 2;
         
+        // Calculate grid spacing in 3D space
+        const spacing = 700 / config.gridDensity;
+        const shouldDrawSides = Math.abs(config.zSeparation) > spacing;
+        
+        // Draw Z-direction connecting lines (back to front)
         for (let i = 0; i <= config.gridDensity; i++) {
             for (let j = 0; j <= config.gridDensity; j++) {
                 if (Math.abs(frontGrid[i][j].pull) > 5) {
@@ -184,6 +189,7 @@ function drawDualGrid() {
                 }
             }
         }
+        
         
         // Highlight the selected point with thicker line
         const i = config.selectedPointX;
@@ -252,6 +258,72 @@ function drawDualGrid() {
             ctx.beginPath();
             ctx.arc(point.x, point.y, 2.5, 0, Math.PI * 2);
             ctx.fill();
+        }
+    }
+    
+    // Draw 3D grid structure - intermediate horizontal slices
+    if (config.zSeparation !== 0 && config.connectionAlpha > 0) {
+        const spacing = 700 / config.gridDensity;
+        const shouldDrawIntermediateSlices = Math.abs(config.zSeparation) > spacing;
+        
+        if (shouldDrawIntermediateSlices) {
+            // Calculate how many intermediate Z slices we need
+            const numSlices = Math.floor(Math.abs(config.zSeparation) / spacing);
+            const backZ = -400;
+            
+            // Draw intermediate horizontal grid slices
+            ctx.strokeStyle = `rgba(51, 51, 51, ${config.connectionAlpha * 0.6})`;
+            ctx.lineWidth = 1.5;
+            
+            // For each intermediate Z level
+            for (let slice = 1; slice <= numSlices; slice++) {
+                const sliceRatio = slice / (numSlices + 1);
+                
+                // Create grid points at this Z level
+                const sliceGrid = [];
+                for (let i = 0; i <= config.gridDensity; i++) {
+                    sliceGrid[i] = [];
+                    for (let j = 0; j <= config.gridDensity; j++) {
+                        const backPos = backGrid[i][j].pos3D;
+                        const frontPos = frontGrid[i][j].pos3D;
+                        
+                        // Interpolate between back and front position
+                        const interpX = backPos.x;
+                        const interpY = backPos.y;
+                        const interpZ = backPos.z + (frontPos.z - backPos.z) * sliceRatio;
+                        
+                        sliceGrid[i][j] = project3D(interpX, interpY, interpZ);
+                    }
+                }
+                
+                // Draw vertical lines at this slice
+                for (let i = 0; i <= config.gridDensity; i++) {
+                    ctx.beginPath();
+                    for (let j = 0; j <= config.gridDensity; j++) {
+                        const point = sliceGrid[i][j];
+                        if (j === 0) {
+                            ctx.moveTo(point.x, point.y);
+                        } else {
+                            ctx.lineTo(point.x, point.y);
+                        }
+                    }
+                    ctx.stroke();
+                }
+                
+                // Draw horizontal lines at this slice
+                for (let j = 0; j <= config.gridDensity; j++) {
+                    ctx.beginPath();
+                    for (let i = 0; i <= config.gridDensity; i++) {
+                        const point = sliceGrid[i][j];
+                        if (i === 0) {
+                            ctx.moveTo(point.x, point.y);
+                        } else {
+                            ctx.lineTo(point.x, point.y);
+                        }
+                    }
+                    ctx.stroke();
+                }
+            }
         }
     }
 }
