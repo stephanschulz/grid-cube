@@ -35,6 +35,7 @@ let config = loadConfig();
 // 3D to 2D projection
 function project3D(x, y, z) {
     if (config.usePerspective) {
+        // Perspective projection - straight on view
         const perspective = 800;
         const scale = perspective / (perspective + z);
         return {
@@ -44,11 +45,22 @@ function project3D(x, y, z) {
             scale: scale
         };
     } else {
-        // Orthographic projection
+        // Orthographic projection - angled side view to show Z depth
+        // Rotate the view to see the Z displacement
+        const angleX = Math.PI / 6; // 30 degrees
+        const angleY = Math.PI / 8; // 22.5 degrees
+        
+        // Apply rotation
+        let x2 = x * Math.cos(angleY) + z * Math.sin(angleY);
+        let z2 = -x * Math.sin(angleY) + z * Math.cos(angleY);
+        
+        let y2 = y * Math.cos(angleX) - z2 * Math.sin(angleX);
+        let z3 = y * Math.sin(angleX) + z2 * Math.cos(angleX);
+        
         return {
-            x: x + canvas.width / 2,
-            y: y + canvas.height / 2,
-            z: z,
+            x: x2 + canvas.width / 2,
+            y: y2 + canvas.height / 2,
+            z: z3,
             scale: 1
         };
     }
@@ -301,7 +313,7 @@ function initializeUI() {
     document.getElementById('connectionAlphaSlider').value = config.connectionAlpha;
     document.getElementById('connectionAlphaValue').textContent = config.connectionAlpha.toFixed(1);
     
-    document.getElementById('viewToggleBtn').textContent = config.usePerspective ? 'Switch to Orthographic' : 'Switch to Perspective';
+    document.getElementById('viewToggleBtn').textContent = config.usePerspective ? 'Switch to Side View' : 'Switch to Front View';
 }
 
 // Controls
@@ -356,7 +368,7 @@ document.getElementById('connectionAlphaSlider').addEventListener('input', (e) =
 
 document.getElementById('viewToggleBtn').addEventListener('click', (e) => {
     config.usePerspective = !config.usePerspective;
-    e.target.textContent = config.usePerspective ? 'Switch to Orthographic' : 'Switch to Perspective';
+    e.target.textContent = config.usePerspective ? 'Switch to Side View' : 'Switch to Front View';
     saveConfig();
 });
 
