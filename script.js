@@ -140,13 +140,15 @@ function drawDualGrid() {
     }
     
     // Draw connecting lines for points with significant pull
-    if (config.zSeparation > 0) {
-        ctx.strokeStyle = `rgba(100, 150, 255, ${alpha * 0.4})`;
+    if (config.zSeparation !== 0) {
+        // Color depends on whether pushing forward (blue) or backward (green)
+        const isForward = config.zSeparation > 0;
+        ctx.strokeStyle = isForward ? `rgba(100, 150, 255, ${alpha * 0.4})` : `rgba(100, 255, 150, ${alpha * 0.4})`;
         ctx.lineWidth = 1;
         
         for (let i = 0; i <= config.gridDensity; i++) {
             for (let j = 0; j <= config.gridDensity; j++) {
-                if (frontGrid[i][j].pull > 5) {
+                if (Math.abs(frontGrid[i][j].pull) > 5) {
                     const backPoint = backGrid[i][j].pos2D;
                     const frontPoint = frontGrid[i][j].pos2D;
                     
@@ -165,7 +167,7 @@ function drawDualGrid() {
         const backPoint = backGrid[i][j].pos2D;
         const frontPoint = frontGrid[i][j].pos2D;
         
-        ctx.strokeStyle = `rgba(255, 100, 100, ${alpha * 0.8})`;
+        ctx.strokeStyle = isForward ? `rgba(255, 100, 100, ${alpha * 0.8})` : `rgba(100, 255, 100, ${alpha * 0.8})`;
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(backPoint.x, backPoint.y);
@@ -173,13 +175,13 @@ function drawDualGrid() {
         ctx.stroke();
         
         // Highlight the selected back point
-        ctx.fillStyle = `rgba(255, 100, 100, ${alpha})`;
+        ctx.fillStyle = isForward ? `rgba(255, 100, 100, ${alpha})` : `rgba(100, 255, 100, ${alpha})`;
         ctx.beginPath();
         ctx.arc(backPoint.x, backPoint.y, 5, 0, Math.PI * 2);
         ctx.fill();
         
-        // Highlight the pulled front point
-        ctx.fillStyle = `rgba(255, 50, 50, ${alpha})`;
+        // Highlight the pulled/pushed front point
+        ctx.fillStyle = isForward ? `rgba(255, 50, 50, ${alpha})` : `rgba(50, 255, 50, ${alpha})`;
         ctx.beginPath();
         ctx.arc(frontPoint.x, frontPoint.y, 7, 0, Math.PI * 2);
         ctx.fill();
