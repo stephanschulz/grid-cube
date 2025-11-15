@@ -261,23 +261,32 @@ function drawDualGrid() {
         }
     }
     
-    // Draw 3D grid structure - intermediate horizontal slices
+    // Draw 3D grid structure - intermediate horizontal slices at uniform spacing
     if (config.zSeparation !== 0 && config.connectionAlpha > 0) {
-        const spacing = 700 / config.gridDensity;
-        const shouldDrawIntermediateSlices = Math.abs(config.zSeparation) > spacing;
+        const spacing = 700 / config.gridDensity; // This is the uniform grid spacing in X/Y
+        
+        // Find the maximum Z displacement to determine how many slices we need
+        let maxZDisplacement = 0;
+        for (let i = 0; i <= config.gridDensity; i++) {
+            for (let j = 0; j <= config.gridDensity; j++) {
+                maxZDisplacement = Math.max(maxZDisplacement, Math.abs(frontGrid[i][j].pull));
+            }
+        }
+        
+        const shouldDrawIntermediateSlices = maxZDisplacement > spacing;
         
         if (shouldDrawIntermediateSlices) {
-            // Calculate how many intermediate Z slices we need
-            const numSlices = Math.floor(Math.abs(config.zSeparation) / spacing);
+            // Calculate how many intermediate Z slices we need based on max displacement
+            const numSlices = Math.floor(maxZDisplacement / spacing);
             const backZ = -400;
             
             // Draw intermediate horizontal grid slices
             ctx.strokeStyle = `rgba(51, 51, 51, ${config.connectionAlpha * 0.6})`;
             ctx.lineWidth = 1.5;
             
-            // For each intermediate Z level
+            // For each intermediate Z level at uniform spacing
             for (let slice = 1; slice <= numSlices; slice++) {
-                const sliceRatio = slice / (numSlices + 1);
+                const sliceZOffset = slice * spacing * Math.sign(config.zSeparation); // Uniform spacing in Z
                 
                 // Create grid points at this Z level
                 const sliceGrid = [];
@@ -286,42 +295,64 @@ function drawDualGrid() {
                     for (let j = 0; j <= config.gridDensity; j++) {
                         const backPos = backGrid[i][j].pos3D;
                         const frontPos = frontGrid[i][j].pos3D;
+                        const targetZ = backPos.z + sliceZOffset;
                         
-                        // Interpolate between back and front position
-                        const interpX = backPos.x;
-                        const interpY = backPos.y;
-                        const interpZ = backPos.z + (frontPos.z - backPos.z) * sliceRatio;
-                        
-                        sliceGrid[i][j] = project3D(interpX, interpY, interpZ);
+                        // Only include this point if it's between back and front
+                        if ((config.zSeparation > 0 && targetZ <= frontPos.z) ||
+                            (config.zSeparation < 0 && targetZ >= frontPos.z)) {
+                            sliceGrid[i][j] = project3D(backPos.x, backPos.y, targetZ);
+                        } else {
+                            sliceGrid[i][j] = null; // Beyond the front grid for this point
+                        }
                     }
                 }
                 
                 // Draw vertical lines at this slice
                 for (let i = 0; i <= config.gridDensity; i++) {
                     ctx.beginPath();
+                    let hasStarted = false;
                     for (let j = 0; j <= config.gridDensity; j++) {
                         const point = sliceGrid[i][j];
-                        if (j === 0) {
-                            ctx.moveTo(point.x, point.y);
+                        if (point) {
+                            if (!hasStarted) {
+                                ctx.moveTo(point.x, point.y);
+                                hasStarted = true;
+                            } else {
+                                ctx.lineTo(point.x, point.y);
+                            }
                         } else {
-                            ctx.lineTo(point.x, point.y);
+                            if (hasStarted) {
+                                ctx.stroke();
+                                ctx.beginPath();
+                                hasStarted = false;
+                            }
                         }
                     }
-                    ctx.stroke();
+                    if (hasStarted) ctx.stroke();
                 }
                 
                 // Draw horizontal lines at this slice
                 for (let j = 0; j <= config.gridDensity; j++) {
                     ctx.beginPath();
+                    let hasStarted = false;
                     for (let i = 0; i <= config.gridDensity; i++) {
                         const point = sliceGrid[i][j];
-                        if (i === 0) {
-                            ctx.moveTo(point.x, point.y);
+                        if (point) {
+                            if (!hasStarted) {
+                                ctx.moveTo(point.x, point.y);
+                                hasStarted = true;
+                            } else {
+                                ctx.lineTo(point.x, point.y);
+                            }
                         } else {
-                            ctx.lineTo(point.x, point.y);
+                            if (hasStarted) {
+                                ctx.stroke();
+                                ctx.beginPath();
+                                hasStarted = false;
+                            }
                         }
                     }
-                    ctx.stroke();
+                    if (hasStarted) ctx.stroke();
                 }
             }
         }
