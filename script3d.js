@@ -20,7 +20,8 @@ function loadConfig() {
         ambientGridAlpha: 0.2,
         interiorAlpha: 0.3,
         shapeType: 'cube',
-        renderMode: 'lines'
+        renderMode: 'lines',
+        pointSize: 3.0
     };
     
     const saved = localStorage.getItem('gridCubeConfig');
@@ -368,7 +369,7 @@ function updateVisualization() {
     if (config.renderMode === 'points') {
         const pointsGeometry = new THREE.BufferGeometry();
         const positions = [];
-        const colors = [];
+        const alphas = [];
         
         // Back layer points
         for (let i = 0; i <= config.gridDensity; i++) {
@@ -376,7 +377,7 @@ function updateVisualization() {
                 const x = (i - config.gridDensity / 2) * spacing;
                 const y = (j - config.gridDensity / 2) * spacing;
                 positions.push(x, y, backZ);
-                colors.push(0, 0, 0);
+                alphas.push(config.backGridAlpha);
             }
         }
         
@@ -385,8 +386,10 @@ function updateVisualization() {
             for (let j = 0; j <= config.gridDensity; j++) {
                 const p = frontPoints[i][j];
                 if (Math.abs(p.pull) > 0.1) {
+                    const classification = classifyGridPoint(i, j, p.z, frontPoints, backZ);
+                    const alpha = getPointAlpha(classification);
                     positions.push(p.x, p.y, p.z);
-                    colors.push(0, 0, 0);
+                    alphas.push(alpha);
                 }
             }
         }
@@ -408,8 +411,10 @@ function updateVisualization() {
                         if (isInFootprint) {
                             const x = (i - config.gridDensity / 2) * spacing;
                             const y = (j - config.gridDensity / 2) * spacing;
+                            const classification = classifyGridPoint(i, j, sliceZ, frontPoints, backZ);
+                            const alpha = getPointAlpha(classification);
                             positions.push(x, y, sliceZ);
-                            colors.push(0, 0, 0);
+                            alphas.push(alpha);
                         }
                     }
                 }
@@ -417,11 +422,37 @@ function updateVisualization() {
         }
         
         pointsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-        pointsGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        pointsGeometry.setAttribute('alpha', new THREE.Float32BufferAttribute(alphas, 1));
         
-        const pointsMaterial = new THREE.PointsMaterial({
-            size: 3,
-            vertexColors: true
+        const pointsMaterial = new THREE.ShaderMaterial({
+            uniforms: {
+                pointSize: { value: config.pointSize }
+            },
+            vertexShader: `
+                attribute float alpha;
+                varying float vAlpha;
+                uniform float pointSize;
+                
+                void main() {
+                    vAlpha = alpha;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    gl_PointSize = pointSize;
+                }
+            `,
+            fragmentShader: `
+                varying float vAlpha;
+                
+                void main() {
+                    // Circular point shape
+                    vec2 coord = gl_PointCoord - vec2(0.5);
+                    if (length(coord) > 0.5) discard;
+                    
+                    gl_FragColor = vec4(0.0, 0.0, 0.0, vAlpha);
+                }
+            `,
+            transparent: true,
+            depthTest: true,
+            depthWrite: false
         });
         
         const pointsCloud = new THREE.Points(pointsGeometry, pointsMaterial);
@@ -628,6 +659,9 @@ function initializeUI() {
     document.getElementById('interiorAlphaSlider').value = config.interiorAlpha;
     document.getElementById('interiorAlphaValue').textContent = config.interiorAlpha.toFixed(1);
     
+    document.getElementById('pointSizeSlider').value = config.pointSize;
+    document.getElementById('pointSizeValue').textContent = config.pointSize.toFixed(1);
+    
     const shapeBtn = document.getElementById('shapeTypeBtn');
     shapeBtn.textContent = config.shapeType === 'cube' ? 'Switch to Sphere' : 'Switch to Cube';
     
@@ -728,6 +762,13 @@ document.getElementById('ambientGridAlphaSlider').addEventListener('input', (e) 
 document.getElementById('interiorAlphaSlider').addEventListener('input', (e) => {
     config.interiorAlpha = parseFloat(e.target.value);
     document.getElementById('interiorAlphaValue').textContent = config.interiorAlpha.toFixed(1);
+    updateVisualization();
+    saveConfig();
+});
+
+document.getElementById('pointSizeSlider').addEventListener('input', (e) => {
+    config.pointSize = parseFloat(e.target.value);
+    document.getElementById('pointSizeValue').textContent = config.pointSize.toFixed(1);
     updateVisualization();
     saveConfig();
 });
