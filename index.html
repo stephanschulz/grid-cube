@@ -164,10 +164,18 @@
         
         <div class="control-group">
             <label>
-                Cube Wall Alpha
-                <span class="value-display" id="connectionAlphaValue">0.4</span>
+                Shape Shell Alpha
+                <span class="value-display" id="shapeShellAlphaValue">0.8</span>
             </label>
-            <input type="range" id="connectionAlphaSlider" min="0" max="1" step="0.1" value="0.4">
+            <input type="range" id="shapeShellAlphaSlider" min="0" max="1" step="0.1" value="0.8">
+        </div>
+        
+        <div class="control-group">
+            <label>
+                Ambient Grid Alpha
+                <span class="value-display" id="ambientGridAlphaValue">0.2</span>
+            </label>
+            <input type="range" id="ambientGridAlphaSlider" min="0" max="1" step="0.1" value="0.2">
         </div>
         
         <div class="control-group">
@@ -176,6 +184,14 @@
                 <span class="value-display" id="interiorAlphaValue">0.3</span>
             </label>
             <input type="range" id="interiorAlphaSlider" min="0" max="1" step="0.1" value="0.3">
+        </div>
+        
+        <div class="control-group">
+            <button id="shapeTypeBtn">Switch to Sphere</button>
+        </div>
+        
+        <div class="control-group">
+            <button id="renderModeBtn">Switch to Points Only</button>
         </div>
         
         <div class="control-group">
