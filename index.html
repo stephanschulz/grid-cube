@@ -122,10 +122,18 @@
         
         <div class="control-group">
             <label>
-                Influence Radius
+                Cube Size
+                <span class="value-display" id="cubeSizeValue">5</span>
+            </label>
+            <input type="range" id="cubeSizeSlider" min="1" max="15" step="1" value="5">
+        </div>
+        
+        <div class="control-group">
+            <label>
+                Influence Distance
                 <span class="value-display" id="influenceRadiusValue">60%</span>
             </label>
-            <input type="range" id="influenceRadiusSlider" min="10" max="100" step="5" value="60">
+            <input type="range" id="influenceRadiusSlider" min="0" max="100" step="5" value="60">
         </div>
         
         <div class="control-group">

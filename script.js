@@ -12,7 +12,8 @@ function loadConfig() {
         selectedPointX: 10,
         selectedPointY: 10,
         zSeparation: 200,
-        influenceRadius: 60, // Percentage of grid density
+        cubeSize: 5, // Size of cube in grid units
+        influenceRadius: 60, // Percentage of grid density for falloff distance
         backGridAlpha: 0.5,
         frontGridAlpha: 1.0,
         connectionAlpha: 0.4,
@@ -93,20 +94,26 @@ function createGridLayers() {
                 pos2D: project3D(backPoint3D.x, backPoint3D.y, backPoint3D.z)
             };
             
-            // Front grid point - calculate distance-based pull (cube effect)
+            // Front grid point - calculate distance-based pull (cube with falloff)
             let zPull = 0;
             
             // Calculate grid distance from selected point using cube (Chebyshev distance)
             const dx = Math.abs(i - config.selectedPointX);
             const dy = Math.abs(j - config.selectedPointY);
-            const gridDistance = Math.max(dx, dy); // Cube-shaped influence
+            const gridDistance = Math.max(dx, dy);
             
-            // Influence radius in grid units (percentage of grid density)
-            const influenceRadius = config.gridDensity * (config.influenceRadius / 100);
+            const cubeSize = config.cubeSize; // Actual cube size in grid units
+            const influenceDistance = config.gridDensity * (config.influenceRadius / 100); // Additional falloff distance
             
-            if (gridDistance < influenceRadius) {
-                // No falloff - all points within the cube get full displacement
+            if (gridDistance < cubeSize) {
+                // Inside the cube - full displacement
                 zPull = config.zSeparation;
+            } else if (gridDistance < cubeSize + influenceDistance) {
+                // In the falloff zone - smooth transition
+                const distanceFromCube = gridDistance - cubeSize;
+                const normalizedDist = distanceFromCube / influenceDistance;
+                const falloff = (Math.cos(normalizedDist * Math.PI) + 1) / 2;
+                zPull = config.zSeparation * falloff;
             }
             
             const frontPoint3D = { x, y, z: backZ + zPull };
@@ -168,39 +175,38 @@ function drawDualGrid() {
         }
     }
     
-    // Helper function to check if a point is on the edge of the displaced region
-    const isOnEdge = (i, j) => {
-        const hasPull = Math.abs(frontGrid[i][j].pull) > 5;
-        if (!hasPull) return false;
+    // Helper function to check if a point is on the edge of the CUBE (not the displaced region)
+    const isOnCubeEdge = (i, j) => {
+        const dx = Math.abs(i - config.selectedPointX);
+        const dy = Math.abs(j - config.selectedPointY);
+        const gridDistance = Math.max(dx, dy);
         
-        // Check if any of the 4 neighbors has no pull (meaning this is an edge)
-        const neighbors = [
-            [i-1, j], [i+1, j], [i, j-1], [i, j+1]
-        ];
-        
-        for (const [ni, nj] of neighbors) {
-            if (ni < 0 || ni > config.gridDensity || nj < 0 || nj > config.gridDensity) {
-                return true; // Edge of grid
-            }
-            if (Math.abs(frontGrid[ni]?.[nj]?.pull || 0) <= 5) {
-                return true; // Neighbor has no pull, so this is an edge
-            }
-        }
-        return false;
+        // Point is on cube edge if it's at exactly cubeSize distance
+        // Check if at least one coordinate is at the boundary
+        return gridDistance < config.cubeSize && 
+               (dx === config.cubeSize - 1 || dy === config.cubeSize - 1);
+    };
+    
+    // Helper function to check if a point is inside the cube
+    const isInsideCube = (i, j) => {
+        const dx = Math.abs(i - config.selectedPointX);
+        const dy = Math.abs(j - config.selectedPointY);
+        const gridDistance = Math.max(dx, dy);
+        return gridDistance < config.cubeSize;
     };
     
     // Draw connecting lines for points with significant pull
     if (config.zSeparation !== 0) {
         const spacing = 700 / config.gridDensity;
         
-        // Draw edge lines (cube walls) with connection alpha - ONLY wall edges
+        // Draw cube wall lines - only the actual cube edges
         if (config.connectionAlpha > 0) {
             ctx.strokeStyle = `rgba(51, 51, 51, ${config.connectionAlpha})`;
             ctx.lineWidth = 2;
             
             for (let i = 0; i <= config.gridDensity; i++) {
                 for (let j = 0; j <= config.gridDensity; j++) {
-                    if (Math.abs(frontGrid[i][j].pull) > 5 && isOnEdge(i, j)) {
+                    if (isOnCubeEdge(i, j)) {
                         const backPoint = backGrid[i][j].pos2D;
                         const frontPoint = frontGrid[i][j].pos2D;
                         
@@ -444,6 +450,9 @@ function initializeUI() {
     document.getElementById('zSeparationSlider').value = config.zSeparation;
     document.getElementById('zSeparationValue').textContent = config.zSeparation;
     
+    document.getElementById('cubeSizeSlider').value = config.cubeSize;
+    document.getElementById('cubeSizeValue').textContent = config.cubeSize;
+    
     document.getElementById('influenceRadiusSlider').value = config.influenceRadius;
     document.getElementById('influenceRadiusValue').textContent = config.influenceRadius + '%';
     
@@ -485,6 +494,12 @@ document.getElementById('pointYSlider').addEventListener('input', (e) => {
 document.getElementById('zSeparationSlider').addEventListener('input', (e) => {
     config.zSeparation = parseInt(e.target.value);
     document.getElementById('zSeparationValue').textContent = config.zSeparation;
+    saveConfig();
+});
+
+document.getElementById('cubeSizeSlider').addEventListener('input', (e) => {
+    config.cubeSize = parseInt(e.target.value);
+    document.getElementById('cubeSizeValue').textContent = config.cubeSize;
     saveConfig();
 });
 
