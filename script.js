@@ -168,64 +168,47 @@ function drawDualGrid() {
         }
     }
     
-    // Draw connecting lines for points with significant pull
-    if (config.zSeparation !== 0 && config.connectionAlpha > 0) {
-        const spacing = 700 / config.gridDensity;
+    // Helper function to check if a point is on the edge of the displaced region
+    const isOnEdge = (i, j) => {
+        const hasPull = Math.abs(frontGrid[i][j].pull) > 5;
+        if (!hasPull) return false;
         
-        // Helper function to check if a point is on the edge of the displaced region
-        const isOnEdge = (i, j) => {
-            const hasPull = Math.abs(frontGrid[i][j].pull) > 5;
-            if (!hasPull) return false;
-            
-            // Check if any of the 4 neighbors has no pull (meaning this is an edge)
-            const neighbors = [
-                [i-1, j], [i+1, j], [i, j-1], [i, j+1]
-            ];
-            
-            for (const [ni, nj] of neighbors) {
-                if (ni < 0 || ni > config.gridDensity || nj < 0 || nj > config.gridDensity) {
-                    return true; // Edge of grid
-                }
-                if (Math.abs(frontGrid[ni]?.[nj]?.pull || 0) <= 5) {
-                    return true; // Neighbor has no pull, so this is an edge
-                }
+        // Check if any of the 4 neighbors has no pull (meaning this is an edge)
+        const neighbors = [
+            [i-1, j], [i+1, j], [i, j-1], [i, j+1]
+        ];
+        
+        for (const [ni, nj] of neighbors) {
+            if (ni < 0 || ni > config.gridDensity || nj < 0 || nj > config.gridDensity) {
+                return true; // Edge of grid
             }
-            return false;
-        };
-        
-        // Draw Z-direction connecting lines (back to front)
-        // Draw interior lines first with separate alpha
-        ctx.strokeStyle = `rgba(51, 51, 51, ${config.interiorAlpha})`;
-        ctx.lineWidth = 2;
-        
-        for (let i = 0; i <= config.gridDensity; i++) {
-            for (let j = 0; j <= config.gridDensity; j++) {
-                if (Math.abs(frontGrid[i][j].pull) > 5 && !isOnEdge(i, j)) {
-                    const backPoint = backGrid[i][j].pos2D;
-                    const frontPoint = frontGrid[i][j].pos2D;
-                    
-                    ctx.beginPath();
-                    ctx.moveTo(backPoint.x, backPoint.y);
-                    ctx.lineTo(frontPoint.x, frontPoint.y);
-                    ctx.stroke();
-                }
+            if (Math.abs(frontGrid[ni]?.[nj]?.pull || 0) <= 5) {
+                return true; // Neighbor has no pull, so this is an edge
             }
         }
+        return false;
+    };
+    
+    // Draw connecting lines for points with significant pull
+    if (config.zSeparation !== 0) {
+        const spacing = 700 / config.gridDensity;
         
-        // Draw edge lines (cube walls) with connection alpha
-        ctx.strokeStyle = `rgba(51, 51, 51, ${config.connectionAlpha})`;
-        ctx.lineWidth = 2;
-        
-        for (let i = 0; i <= config.gridDensity; i++) {
-            for (let j = 0; j <= config.gridDensity; j++) {
-                if (Math.abs(frontGrid[i][j].pull) > 5 && isOnEdge(i, j)) {
-                    const backPoint = backGrid[i][j].pos2D;
-                    const frontPoint = frontGrid[i][j].pos2D;
-                    
-                    ctx.beginPath();
-                    ctx.moveTo(backPoint.x, backPoint.y);
-                    ctx.lineTo(frontPoint.x, frontPoint.y);
-                    ctx.stroke();
+        // Draw edge lines (cube walls) with connection alpha - ONLY wall edges
+        if (config.connectionAlpha > 0) {
+            ctx.strokeStyle = `rgba(51, 51, 51, ${config.connectionAlpha})`;
+            ctx.lineWidth = 2;
+            
+            for (let i = 0; i <= config.gridDensity; i++) {
+                for (let j = 0; j <= config.gridDensity; j++) {
+                    if (Math.abs(frontGrid[i][j].pull) > 5 && isOnEdge(i, j)) {
+                        const backPoint = backGrid[i][j].pos2D;
+                        const frontPoint = frontGrid[i][j].pos2D;
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(backPoint.x, backPoint.y);
+                        ctx.lineTo(frontPoint.x, frontPoint.y);
+                        ctx.stroke();
+                    }
                 }
             }
         }
@@ -258,51 +241,60 @@ function drawDualGrid() {
         ctx.fill();
     }
     
-    // Draw front grid (darker)
+    // Helper to check if point has displacement
+    const hasDisplacement = (i, j) => Math.abs(frontGrid[i][j].pull) > 5;
+    
+    // Draw front grid - only where there's displacement (this is the top face of the cube)
     ctx.strokeStyle = `rgba(51, 51, 51, ${config.frontGridAlpha})`;
     ctx.lineWidth = 2;
     
     // Front grid vertical lines
     for (let i = 0; i <= config.gridDensity; i++) {
-        ctx.beginPath();
-        for (let j = 0; j <= config.gridDensity; j++) {
-            const point = frontGrid[i][j].pos2D;
-            if (j === 0) {
-                ctx.moveTo(point.x, point.y);
-            } else {
-                ctx.lineTo(point.x, point.y);
+        for (let j = 0; j < config.gridDensity; j++) {
+            // Only draw if at least one endpoint has displacement
+            if (hasDisplacement(i, j) || hasDisplacement(i, j+1)) {
+                const point1 = frontGrid[i][j].pos2D;
+                const point2 = frontGrid[i][j+1].pos2D;
+                
+                ctx.beginPath();
+                ctx.moveTo(point1.x, point1.y);
+                ctx.lineTo(point2.x, point2.y);
+                ctx.stroke();
             }
         }
-        ctx.stroke();
     }
     
     // Front grid horizontal lines
     for (let j = 0; j <= config.gridDensity; j++) {
-        ctx.beginPath();
-        for (let i = 0; i <= config.gridDensity; i++) {
-            const point = frontGrid[i][j].pos2D;
-            if (i === 0) {
-                ctx.moveTo(point.x, point.y);
-            } else {
-                ctx.lineTo(point.x, point.y);
+        for (let i = 0; i < config.gridDensity; i++) {
+            // Only draw if at least one endpoint has displacement
+            if (hasDisplacement(i, j) || hasDisplacement(i+1, j)) {
+                const point1 = frontGrid[i][j].pos2D;
+                const point2 = frontGrid[i+1][j].pos2D;
+                
+                ctx.beginPath();
+                ctx.moveTo(point1.x, point1.y);
+                ctx.lineTo(point2.x, point2.y);
+                ctx.stroke();
             }
         }
-        ctx.stroke();
     }
     
-    // Draw front grid points
+    // Draw front grid points - only where there's displacement
     ctx.fillStyle = `rgba(51, 51, 51, ${config.frontGridAlpha})`;
     for (let i = 0; i <= config.gridDensity; i++) {
         for (let j = 0; j <= config.gridDensity; j++) {
-            const point = frontGrid[i][j].pos2D;
-            ctx.beginPath();
-            ctx.arc(point.x, point.y, 2.5, 0, Math.PI * 2);
-            ctx.fill();
+            if (hasDisplacement(i, j)) {
+                const point = frontGrid[i][j].pos2D;
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
     }
     
     // Draw 3D grid structure - intermediate horizontal slices at uniform spacing
-    if (config.zSeparation !== 0 && config.connectionAlpha > 0) {
+    if (config.zSeparation !== 0 && config.interiorAlpha > 0) {
         const spacing = 700 / config.gridDensity; // This is the uniform grid spacing in X/Y
         
         // Find the maximum Z displacement to determine how many slices we need
@@ -372,12 +364,8 @@ function drawDualGrid() {
                         const point2 = sliceGrid[i][j+1];
                         
                         if (point1 && point2) {
-                            // Check if this line segment is on the edge
-                            const isEdge = isOnEdge(i, j) || isOnEdge(i, j+1);
-                            
-                            // Use interiorAlpha for interior lines, connectionAlpha for edges
-                            const alpha = isEdge ? config.connectionAlpha * 0.6 : config.interiorAlpha * 0.6;
-                            ctx.strokeStyle = `rgba(51, 51, 51, ${alpha})`;
+                            // All intermediate slice lines use interior alpha
+                            ctx.strokeStyle = `rgba(51, 51, 51, ${config.interiorAlpha * 0.6})`;
                             ctx.lineWidth = 1.5;
                             
                             ctx.beginPath();
@@ -395,12 +383,8 @@ function drawDualGrid() {
                         const point2 = sliceGrid[i+1][j];
                         
                         if (point1 && point2) {
-                            // Check if this line segment is on the edge
-                            const isEdge = isOnEdge(i, j) || isOnEdge(i+1, j);
-                            
-                            // Use interiorAlpha for interior lines, connectionAlpha for edges
-                            const alpha = isEdge ? config.connectionAlpha * 0.6 : config.interiorAlpha * 0.6;
-                            ctx.strokeStyle = `rgba(51, 51, 51, ${alpha})`;
+                            // All intermediate slice lines use interior alpha
+                            ctx.strokeStyle = `rgba(51, 51, 51, ${config.interiorAlpha * 0.6})`;
                             ctx.lineWidth = 1.5;
                             
                             ctx.beginPath();
