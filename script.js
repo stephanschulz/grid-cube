@@ -92,10 +92,10 @@ function createGridLayers() {
             // Front grid point - calculate distance-based pull (tent effect)
             let zPull = 0;
             
-            // Calculate grid distance from selected point
-            const dx = i - config.selectedPointX;
-            const dy = j - config.selectedPointY;
-            const gridDistance = Math.sqrt(dx * dx + dy * dy);
+            // Calculate grid distance from selected point using cube (Chebyshev distance)
+            const dx = Math.abs(i - config.selectedPointX);
+            const dy = Math.abs(j - config.selectedPointY);
+            const gridDistance = Math.max(dx, dy); // Cube-shaped influence
             
             // Influence radius in grid units (percentage of grid density)
             const influenceRadius = config.gridDensity * (config.influenceRadius / 100);
