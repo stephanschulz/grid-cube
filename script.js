@@ -89,7 +89,7 @@ function createGridLayers() {
                 pos2D: project3D(backPoint3D.x, backPoint3D.y, backPoint3D.z)
             };
             
-            // Front grid point - calculate distance-based pull (tent effect)
+            // Front grid point - calculate distance-based pull (cube effect)
             let zPull = 0;
             
             // Calculate grid distance from selected point using cube (Chebyshev distance)
@@ -101,10 +101,8 @@ function createGridLayers() {
             const influenceRadius = config.gridDensity * (config.influenceRadius / 100);
             
             if (gridDistance < influenceRadius) {
-                // Smooth falloff using cosine interpolation
-                const normalizedDist = gridDistance / influenceRadius;
-                const falloff = (Math.cos(normalizedDist * Math.PI) + 1) / 2;
-                zPull = config.zSeparation * falloff;
+                // No falloff - all points within the cube get full displacement
+                zPull = config.zSeparation;
             }
             
             const frontPoint3D = { x, y, z: backZ + zPull };
