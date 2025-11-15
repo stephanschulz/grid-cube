@@ -254,7 +254,7 @@ function updateVisualization() {
         frontGridGroup.add(stretchedGrid);
     }
     
-    // Draw cube walls (Z-direction lines)
+    // Draw cube walls (Z-direction lines) and stretched cloth connecting lines
     if (config.connectionAlpha > 0) {
         const wallMaterial = new THREE.LineBasicMaterial({
             color: 0x333333,
@@ -262,6 +262,7 @@ function updateVisualization() {
             opacity: config.connectionAlpha
         });
         
+        // Draw cube wall edges
         for (let i = 0; i <= config.gridDensity; i++) {
             for (let j = 0; j <= config.gridDensity; j++) {
                 if (isOnCubeEdge(i, j)) {
@@ -281,6 +282,34 @@ function updateVisualization() {
         }
     }
     
+    // Draw stretched cloth Z-direction connecting lines
+    if (config.influenceRadius > 0 && config.backGridAlpha > 0) {
+        const clothMaterial = new THREE.LineBasicMaterial({
+            color: 0x333333,
+            transparent: true,
+            opacity: config.backGridAlpha * 0.5
+        });
+        
+        for (let i = 0; i <= config.gridDensity; i++) {
+            for (let j = 0; j <= config.gridDensity; j++) {
+                const isInStretched = !isInsideCube(i, j) && Math.abs(frontPoints[i][j].pull) > 0.1;
+                if (isInStretched) {
+                    const backPoint = backPoints[i][j];
+                    const frontPoint = frontPoints[i][j];
+                    
+                    const geometry = new THREE.BufferGeometry();
+                    const vertices = [
+                        backPoint.x, backPoint.y, backPoint.z,
+                        frontPoint.x, frontPoint.y, frontPoint.z
+                    ];
+                    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+                    const line = new THREE.Line(geometry, clothMaterial);
+                    cubeWallsGroup.add(line);
+                }
+            }
+        }
+    }
+    
     // Draw interior slices
     if (config.interiorAlpha > 0 && Math.abs(config.zSeparation) > spacing) {
         const maxZDisplacement = Math.abs(config.zSeparation);
@@ -293,9 +322,12 @@ function updateVisualization() {
             for (let i = 0; i <= config.gridDensity; i++) {
                 slicePoints[i] = [];
                 for (let j = 0; j <= config.gridDensity; j++) {
+                    const backPointZ = backZ;
                     const frontZ = frontPoints[i][j].z;
-                    const isInFootprint = (config.zSeparation > 0 && sliceZ <= frontZ) ||
-                                         (config.zSeparation < 0 && sliceZ >= frontZ);
+                    
+                    // Check if this slice Z is between back and front for this point
+                    const isInFootprint = (config.zSeparation > 0 && sliceZ > backPointZ && sliceZ < frontZ) ||
+                                         (config.zSeparation < 0 && sliceZ < backPointZ && sliceZ > frontZ);
                     
                     if (isInFootprint) {
                         const x = (i - config.gridDensity / 2) * spacing;
@@ -315,7 +347,7 @@ function updateVisualization() {
 
 // Reset camera to front view
 function resetCamera() {
-    camera.position.set(0, 0, 1200);
+    camera.position.set(0, 0, 300);
     camera.lookAt(0, 0, 0);
     controls.target.set(0, 0, 0);
     controls.update();
