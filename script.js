@@ -7,11 +7,7 @@ canvas.height = 1000;
 
 // Load configuration from localStorage or use defaults
 function loadConfig() {
-    const saved = localStorage.getItem('gridCubeConfig');
-    if (saved) {
-        return JSON.parse(saved);
-    }
-    return {
+    const defaults = {
         gridDensity: 20,
         selectedPointX: 10,
         selectedPointY: 10,
@@ -20,8 +16,16 @@ function loadConfig() {
         backGridAlpha: 0.5,
         frontGridAlpha: 1.0,
         connectionAlpha: 0.4,
+        interiorAlpha: 0.3,
         usePerspective: true
     };
+    
+    const saved = localStorage.getItem('gridCubeConfig');
+    if (saved) {
+        // Merge saved config with defaults to handle new properties
+        return { ...defaults, ...JSON.parse(saved) };
+    }
+    return defaults;
 }
 
 // Save configuration to localStorage
@@ -166,17 +170,55 @@ function drawDualGrid() {
     
     // Draw connecting lines for points with significant pull
     if (config.zSeparation !== 0 && config.connectionAlpha > 0) {
+        const spacing = 700 / config.gridDensity;
+        
+        // Helper function to check if a point is on the edge of the displaced region
+        const isOnEdge = (i, j) => {
+            const hasPull = Math.abs(frontGrid[i][j].pull) > 5;
+            if (!hasPull) return false;
+            
+            // Check if any of the 4 neighbors has no pull (meaning this is an edge)
+            const neighbors = [
+                [i-1, j], [i+1, j], [i, j-1], [i, j+1]
+            ];
+            
+            for (const [ni, nj] of neighbors) {
+                if (ni < 0 || ni > config.gridDensity || nj < 0 || nj > config.gridDensity) {
+                    return true; // Edge of grid
+                }
+                if (Math.abs(frontGrid[ni]?.[nj]?.pull || 0) <= 5) {
+                    return true; // Neighbor has no pull, so this is an edge
+                }
+            }
+            return false;
+        };
+        
+        // Draw Z-direction connecting lines (back to front)
+        // Draw interior lines first with separate alpha
+        ctx.strokeStyle = `rgba(51, 51, 51, ${config.interiorAlpha})`;
+        ctx.lineWidth = 2;
+        
+        for (let i = 0; i <= config.gridDensity; i++) {
+            for (let j = 0; j <= config.gridDensity; j++) {
+                if (Math.abs(frontGrid[i][j].pull) > 5 && !isOnEdge(i, j)) {
+                    const backPoint = backGrid[i][j].pos2D;
+                    const frontPoint = frontGrid[i][j].pos2D;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(backPoint.x, backPoint.y);
+                    ctx.lineTo(frontPoint.x, frontPoint.y);
+                    ctx.stroke();
+                }
+            }
+        }
+        
+        // Draw edge lines (cube walls) with connection alpha
         ctx.strokeStyle = `rgba(51, 51, 51, ${config.connectionAlpha})`;
         ctx.lineWidth = 2;
         
-        // Calculate grid spacing in 3D space
-        const spacing = 700 / config.gridDensity;
-        const shouldDrawSides = Math.abs(config.zSeparation) > spacing;
-        
-        // Draw Z-direction connecting lines (back to front)
         for (let i = 0; i <= config.gridDensity; i++) {
             for (let j = 0; j <= config.gridDensity; j++) {
-                if (Math.abs(frontGrid[i][j].pull) > 5) {
+                if (Math.abs(frontGrid[i][j].pull) > 5 && isOnEdge(i, j)) {
                     const backPoint = backGrid[i][j].pos2D;
                     const frontPoint = frontGrid[i][j].pos2D;
                     
@@ -278,10 +320,28 @@ function drawDualGrid() {
             const numSlices = Math.floor(maxZDisplacement / spacing);
             const backZ = -400;
             
-            // Draw intermediate horizontal grid slices
-            ctx.strokeStyle = `rgba(51, 51, 51, ${config.connectionAlpha * 0.6})`;
-            ctx.lineWidth = 1.5;
+            // Helper function to check if a point is on the edge of the displaced region
+            const isOnEdge = (i, j) => {
+                const hasPull = Math.abs(frontGrid[i][j].pull) > 5;
+                if (!hasPull) return false;
+                
+                // Check if any of the 4 neighbors has no pull (meaning this is an edge)
+                const neighbors = [
+                    [i-1, j], [i+1, j], [i, j-1], [i, j+1]
+                ];
+                
+                for (const [ni, nj] of neighbors) {
+                    if (ni < 0 || ni > config.gridDensity || nj < 0 || nj > config.gridDensity) {
+                        return true; // Edge of grid
+                    }
+                    if (Math.abs(frontGrid[ni]?.[nj]?.pull || 0) <= 5) {
+                        return true; // Neighbor has no pull, so this is an edge
+                    }
+                }
+                return false;
+            };
             
+            // Draw intermediate horizontal grid slices
             // For each intermediate Z level at uniform spacing
             for (let slice = 1; slice <= numSlices; slice++) {
                 const sliceZOffset = slice * spacing * Math.sign(config.zSeparation); // Uniform spacing in Z
@@ -307,50 +367,48 @@ function drawDualGrid() {
                 
                 // Draw vertical lines at this slice
                 for (let i = 0; i <= config.gridDensity; i++) {
-                    ctx.beginPath();
-                    let hasStarted = false;
-                    for (let j = 0; j <= config.gridDensity; j++) {
-                        const point = sliceGrid[i][j];
-                        if (point) {
-                            if (!hasStarted) {
-                                ctx.moveTo(point.x, point.y);
-                                hasStarted = true;
-                            } else {
-                                ctx.lineTo(point.x, point.y);
-                            }
-                        } else {
-                            if (hasStarted) {
-                                ctx.stroke();
-                                ctx.beginPath();
-                                hasStarted = false;
-                            }
+                    for (let j = 0; j < config.gridDensity; j++) {
+                        const point1 = sliceGrid[i][j];
+                        const point2 = sliceGrid[i][j+1];
+                        
+                        if (point1 && point2) {
+                            // Check if this line segment is on the edge
+                            const isEdge = isOnEdge(i, j) || isOnEdge(i, j+1);
+                            
+                            // Use interiorAlpha for interior lines, connectionAlpha for edges
+                            const alpha = isEdge ? config.connectionAlpha * 0.6 : config.interiorAlpha * 0.6;
+                            ctx.strokeStyle = `rgba(51, 51, 51, ${alpha})`;
+                            ctx.lineWidth = 1.5;
+                            
+                            ctx.beginPath();
+                            ctx.moveTo(point1.x, point1.y);
+                            ctx.lineTo(point2.x, point2.y);
+                            ctx.stroke();
                         }
                     }
-                    if (hasStarted) ctx.stroke();
                 }
                 
                 // Draw horizontal lines at this slice
                 for (let j = 0; j <= config.gridDensity; j++) {
-                    ctx.beginPath();
-                    let hasStarted = false;
-                    for (let i = 0; i <= config.gridDensity; i++) {
-                        const point = sliceGrid[i][j];
-                        if (point) {
-                            if (!hasStarted) {
-                                ctx.moveTo(point.x, point.y);
-                                hasStarted = true;
-                            } else {
-                                ctx.lineTo(point.x, point.y);
-                            }
-                        } else {
-                            if (hasStarted) {
-                                ctx.stroke();
-                                ctx.beginPath();
-                                hasStarted = false;
-                            }
+                    for (let i = 0; i < config.gridDensity; i++) {
+                        const point1 = sliceGrid[i][j];
+                        const point2 = sliceGrid[i+1][j];
+                        
+                        if (point1 && point2) {
+                            // Check if this line segment is on the edge
+                            const isEdge = isOnEdge(i, j) || isOnEdge(i+1, j);
+                            
+                            // Use interiorAlpha for interior lines, connectionAlpha for edges
+                            const alpha = isEdge ? config.connectionAlpha * 0.6 : config.interiorAlpha * 0.6;
+                            ctx.strokeStyle = `rgba(51, 51, 51, ${alpha})`;
+                            ctx.lineWidth = 1.5;
+                            
+                            ctx.beginPath();
+                            ctx.moveTo(point1.x, point1.y);
+                            ctx.lineTo(point2.x, point2.y);
+                            ctx.stroke();
                         }
                     }
-                    if (hasStarted) ctx.stroke();
                 }
             }
         }
@@ -414,6 +472,9 @@ function initializeUI() {
     document.getElementById('connectionAlphaSlider').value = config.connectionAlpha;
     document.getElementById('connectionAlphaValue').textContent = config.connectionAlpha.toFixed(1);
     
+    document.getElementById('interiorAlphaSlider').value = config.interiorAlpha;
+    document.getElementById('interiorAlphaValue').textContent = config.interiorAlpha.toFixed(1);
+    
     document.getElementById('viewToggleBtn').textContent = config.usePerspective ? 'Switch to Side View' : 'Switch to Front View';
 }
 
@@ -464,6 +525,12 @@ document.getElementById('frontGridAlphaSlider').addEventListener('input', (e) =>
 document.getElementById('connectionAlphaSlider').addEventListener('input', (e) => {
     config.connectionAlpha = parseFloat(e.target.value);
     document.getElementById('connectionAlphaValue').textContent = config.connectionAlpha.toFixed(1);
+    saveConfig();
+});
+
+document.getElementById('interiorAlphaSlider').addEventListener('input', (e) => {
+    config.interiorAlpha = parseFloat(e.target.value);
+    document.getElementById('interiorAlphaValue').textContent = config.interiorAlpha.toFixed(1);
     saveConfig();
 });
 
