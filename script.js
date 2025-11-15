@@ -99,7 +99,7 @@ function drawDualGrid() {
     
     // Draw back grid (black)
     ctx.strokeStyle = `rgba(51, 51, 51, ${config.backGridAlpha})`;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 2;
     
     // Back grid vertical lines
     for (let i = 0; i <= config.gridDensity; i++) {
@@ -143,7 +143,7 @@ function drawDualGrid() {
     // Draw connecting lines for points with significant pull
     if (config.zSeparation !== 0 && config.connectionAlpha > 0) {
         ctx.strokeStyle = `rgba(51, 51, 51, ${config.connectionAlpha})`;
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 2;
         
         for (let i = 0; i <= config.gridDensity; i++) {
             for (let j = 0; j <= config.gridDensity; j++) {
@@ -167,7 +167,7 @@ function drawDualGrid() {
         const frontPoint = frontGrid[i][j].pos2D;
         
         ctx.strokeStyle = `rgba(51, 51, 51, ${config.connectionAlpha * 1.5})`;
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(backPoint.x, backPoint.y);
         ctx.lineTo(frontPoint.x, frontPoint.y);
