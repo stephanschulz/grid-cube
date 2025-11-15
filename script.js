@@ -11,8 +11,10 @@ let config = {
     selectedPointX: 10,
     selectedPointY: 10,
     zSeparation: 200,
-    gridAlpha: 1,
-    cubeAlpha: 0, // Not used for now
+    influenceRadius: 60, // Percentage of grid density
+    backGridAlpha: 0.5,
+    frontGridAlpha: 1.0,
+    connectionAlpha: 0.4,
     usePerspective: true
 };
 
@@ -69,8 +71,8 @@ function createGridLayers() {
             const dy = j - config.selectedPointY;
             const gridDistance = Math.sqrt(dx * dx + dy * dy);
             
-            // Influence radius in grid units
-            const influenceRadius = config.gridDensity * 0.6;
+            // Influence radius in grid units (percentage of grid density)
+            const influenceRadius = config.gridDensity * (config.influenceRadius / 100);
             
             if (gridDistance < influenceRadius) {
                 // Smooth falloff using cosine interpolation
@@ -94,10 +96,9 @@ function createGridLayers() {
 // Draw the dual-layer grid system
 function drawDualGrid() {
     const { backGrid, frontGrid } = createGridLayers();
-    const alpha = config.gridAlpha;
     
     // Draw back grid (lighter gray)
-    ctx.strokeStyle = `rgba(150, 150, 150, ${alpha * 0.5})`;
+    ctx.strokeStyle = `rgba(150, 150, 150, ${config.backGridAlpha})`;
     ctx.lineWidth = 1.5;
     
     // Back grid vertical lines
@@ -129,7 +130,7 @@ function drawDualGrid() {
     }
     
     // Draw back grid points
-    ctx.fillStyle = `rgba(150, 150, 150, ${alpha * 0.6})`;
+    ctx.fillStyle = `rgba(150, 150, 150, ${config.backGridAlpha * 0.8})`;
     for (let i = 0; i <= config.gridDensity; i++) {
         for (let j = 0; j <= config.gridDensity; j++) {
             const point = backGrid[i][j].pos2D;
@@ -140,10 +141,10 @@ function drawDualGrid() {
     }
     
     // Draw connecting lines for points with significant pull
-    if (config.zSeparation !== 0) {
+    if (config.zSeparation !== 0 && config.connectionAlpha > 0) {
         // Color depends on whether pushing forward (blue) or backward (green)
         const isForward = config.zSeparation > 0;
-        ctx.strokeStyle = isForward ? `rgba(100, 150, 255, ${alpha * 0.4})` : `rgba(100, 255, 150, ${alpha * 0.4})`;
+        ctx.strokeStyle = isForward ? `rgba(100, 150, 255, ${config.connectionAlpha})` : `rgba(100, 255, 150, ${config.connectionAlpha})`;
         ctx.lineWidth = 1;
         
         for (let i = 0; i <= config.gridDensity; i++) {
@@ -167,7 +168,7 @@ function drawDualGrid() {
         const backPoint = backGrid[i][j].pos2D;
         const frontPoint = frontGrid[i][j].pos2D;
         
-        ctx.strokeStyle = isForward ? `rgba(255, 100, 100, ${alpha * 0.8})` : `rgba(100, 255, 100, ${alpha * 0.8})`;
+        ctx.strokeStyle = isForward ? `rgba(255, 100, 100, ${config.connectionAlpha * 1.5})` : `rgba(100, 255, 100, ${config.connectionAlpha * 1.5})`;
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(backPoint.x, backPoint.y);
@@ -175,20 +176,20 @@ function drawDualGrid() {
         ctx.stroke();
         
         // Highlight the selected back point
-        ctx.fillStyle = isForward ? `rgba(255, 100, 100, ${alpha})` : `rgba(100, 255, 100, ${alpha})`;
+        ctx.fillStyle = isForward ? `rgba(255, 100, 100, ${config.backGridAlpha})` : `rgba(100, 255, 100, ${config.backGridAlpha})`;
         ctx.beginPath();
         ctx.arc(backPoint.x, backPoint.y, 5, 0, Math.PI * 2);
         ctx.fill();
         
         // Highlight the pulled/pushed front point
-        ctx.fillStyle = isForward ? `rgba(255, 50, 50, ${alpha})` : `rgba(50, 255, 50, ${alpha})`;
+        ctx.fillStyle = isForward ? `rgba(255, 50, 50, ${config.frontGridAlpha})` : `rgba(50, 255, 50, ${config.frontGridAlpha})`;
         ctx.beginPath();
         ctx.arc(frontPoint.x, frontPoint.y, 7, 0, Math.PI * 2);
         ctx.fill();
     }
     
     // Draw front grid (darker)
-    ctx.strokeStyle = `rgba(51, 51, 51, ${alpha})`;
+    ctx.strokeStyle = `rgba(51, 51, 51, ${config.frontGridAlpha})`;
     ctx.lineWidth = 2;
     
     // Front grid vertical lines
@@ -220,7 +221,7 @@ function drawDualGrid() {
     }
     
     // Draw front grid points
-    ctx.fillStyle = `rgba(51, 51, 51, ${alpha})`;
+    ctx.fillStyle = `rgba(51, 51, 51, ${config.frontGridAlpha})`;
     for (let i = 0; i <= config.gridDensity; i++) {
         for (let j = 0; j <= config.gridDensity; j++) {
             const point = frontGrid[i][j].pos2D;
@@ -284,14 +285,24 @@ document.getElementById('zSeparationSlider').addEventListener('input', (e) => {
     document.getElementById('zSeparationValue').textContent = config.zSeparation;
 });
 
-document.getElementById('gridAlphaSlider').addEventListener('input', (e) => {
-    config.gridAlpha = parseFloat(e.target.value);
-    document.getElementById('gridAlphaValue').textContent = config.gridAlpha.toFixed(1);
+document.getElementById('influenceRadiusSlider').addEventListener('input', (e) => {
+    config.influenceRadius = parseInt(e.target.value);
+    document.getElementById('influenceRadiusValue').textContent = config.influenceRadius + '%';
 });
 
-document.getElementById('cubeAlphaSlider').addEventListener('input', (e) => {
-    config.cubeAlpha = parseFloat(e.target.value);
-    document.getElementById('cubeAlphaValue').textContent = config.cubeAlpha.toFixed(1);
+document.getElementById('backGridAlphaSlider').addEventListener('input', (e) => {
+    config.backGridAlpha = parseFloat(e.target.value);
+    document.getElementById('backGridAlphaValue').textContent = config.backGridAlpha.toFixed(1);
+});
+
+document.getElementById('frontGridAlphaSlider').addEventListener('input', (e) => {
+    config.frontGridAlpha = parseFloat(e.target.value);
+    document.getElementById('frontGridAlphaValue').textContent = config.frontGridAlpha.toFixed(1);
+});
+
+document.getElementById('connectionAlphaSlider').addEventListener('input', (e) => {
+    config.connectionAlpha = parseFloat(e.target.value);
+    document.getElementById('connectionAlphaValue').textContent = config.connectionAlpha.toFixed(1);
 });
 
 document.getElementById('viewToggleBtn').addEventListener('click', (e) => {
