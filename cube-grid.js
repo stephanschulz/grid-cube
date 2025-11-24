@@ -337,72 +337,122 @@ function createCloth() {
     const halfX = (numCellsX * gridSpacing) / 2;
     const halfZ = (numCellsZ * gridSpacing) / 2;
     
-    // Create rotation matrices for the cube
-    const rotationMatrix = new THREE.Matrix4();
-    rotationMatrix.makeRotationFromEuler(new THREE.Euler(
+    // Build a dense height map by sampling ALL 6 faces of the cube
+    const cubeSurfacePoints = [];
+    const sampleDensity = config.gridDensity * 2; // Sample more densely than grid
+    const sampleSpacing = (2 * s) / sampleDensity;
+    
+    // Create rotation
+    const euler = new THREE.Euler(
         config.cubeRotationX * (Math.PI / 180),
         config.cubeRotationY * (Math.PI / 180),
         config.cubeRotationZ * (Math.PI / 180),
         'XYZ'
-    ));
+    );
     
-    const inverseRotationMatrix = new THREE.Matrix4();
-    inverseRotationMatrix.copy(rotationMatrix).invert();
+    // Sample all 6 faces
+    for (let i = 0; i <= sampleDensity; i++) {
+        for (let j = 0; j <= sampleDensity; j++) {
+            const u = -s + (i * sampleSpacing);
+            const v = -s + (j * sampleSpacing);
+            
+            // Top face (Y = s)
+            const top = new THREE.Vector3(u, s, v);
+            top.applyEuler(euler);
+            cubeSurfacePoints.push(top);
+            
+            // Bottom face (Y = -s)
+            const bottom = new THREE.Vector3(u, -s, v);
+            bottom.applyEuler(euler);
+            cubeSurfacePoints.push(bottom);
+            
+            // Front face (Z = s)
+            const front = new THREE.Vector3(u, v, s);
+            front.applyEuler(euler);
+            cubeSurfacePoints.push(front);
+            
+            // Back face (Z = -s)
+            const back = new THREE.Vector3(u, v, -s);
+            back.applyEuler(euler);
+            cubeSurfacePoints.push(back);
+            
+            // Left face (X = -s)
+            const left = new THREE.Vector3(-s, u, v);
+            left.applyEuler(euler);
+            cubeSurfacePoints.push(left);
+            
+            // Right face (X = s)
+            const right = new THREE.Vector3(s, u, v);
+            right.applyEuler(euler);
+            cubeSurfacePoints.push(right);
+        }
+    }
     
     /**
-     * Calculate cloth height by finding closest point on cube surface
-     * Projects the XZ position onto the rotated cube and finds the highest surface point
+     * Calculate cloth height by finding the highest cube surface point at this XZ position
      */
     function calculateYDisplacement(x, z) {
-        // Transform the XZ point into cube's local space
-        const worldPoint = new THREE.Vector3(x, 0, z);
-        const localPoint = worldPoint.clone().applyMatrix4(inverseRotationMatrix);
+        let maxHeight = 0;
+        let minDistance = Infinity;
+        const searchRadius = (config.clothExtension + 2) * gridSpacing;
         
-        // Clamp to cube bounds to find closest point on cube
-        const clampedX = Math.max(-s, Math.min(s, localPoint.x));
-        const clampedY = s; // Always use top of cube
-        const clampedZ = Math.max(-s, Math.min(s, localPoint.z));
-        
-        const closestLocalPoint = new THREE.Vector3(clampedX, clampedY, clampedZ);
-        
-        // Transform back to world space
-        const closestWorldPoint = closestLocalPoint.clone().applyMatrix4(rotationMatrix);
-        const targetHeight = closestWorldPoint.y - floorY;
-        
-        // Calculate XZ distance in local space to determine if inside/outside cube
-        const localDx = Math.abs(localPoint.x);
-        const localDz = Math.abs(localPoint.z);
-        
-        // Inside cube footprint
-        if (localDx <= s && localDz <= s) {
-            return Math.max(0, targetHeight);
+        // Find the highest surface point near this XZ position
+        for (const point of cubeSurfacePoints) {
+            const dx = point.x - x;
+            const dz = point.z - z;
+            const xzDist = Math.sqrt(dx * dx + dz * dz);
+            
+            if (xzDist > searchRadius) continue;
+            
+            const height = point.y - floorY;
+            
+            // Track closest distance
+            if (xzDist < minDistance) {
+                minDistance = xzDist;
+            }
+            
+            // If very close in XZ, use this height
+            if (xzDist < gridSpacing * 0.5) {
+                maxHeight = Math.max(maxHeight, height);
+            }
         }
         
-        // Outside cube - calculate distance and apply falloff
-        let distanceFromCube;
-        
-        if (localDx <= s) {
-            distanceFromCube = localDz - s;
-        } else if (localDz <= s) {
-            distanceFromCube = localDx - s;
-        } else {
-            const cornerDx = localDx - s;
-            const cornerDz = localDz - s;
-            distanceFromCube = Math.sqrt(cornerDx * cornerDx + cornerDz * cornerDz);
+        // If we found a height at this position, use it
+        if (maxHeight > 0) {
+            return maxHeight;
         }
         
-        const influenceDistance = config.clothExtension * gridSpacing;
+        // Otherwise, find nearest surface point and apply falloff
+        let nearestHeight = 0;
+        minDistance = Infinity;
         
-        if (influenceDistance === 0 || distanceFromCube > influenceDistance) {
-            return 0;
+        for (const point of cubeSurfacePoints) {
+            const dx = point.x - x;
+            const dz = point.z - z;
+            const xzDist = Math.sqrt(dx * dx + dz * dz);
+            
+            if (xzDist < minDistance) {
+                minDistance = xzDist;
+                nearestHeight = point.y - floorY;
+            }
         }
         
-        // Exponential falloff
-        const normalizedDistance = distanceFromCube / influenceDistance;
-        const exponent = 1 + (config.clothStiffness * 4);
-        const falloff = 1 - Math.pow(normalizedDistance, exponent);
+        if (nearestHeight > 0) {
+            const influenceDistance = config.clothExtension * gridSpacing;
+            
+            if (influenceDistance === 0 || minDistance > influenceDistance) {
+                return 0;
+            }
+            
+            // Exponential falloff
+            const normalizedDistance = minDistance / influenceDistance;
+            const exponent = 1 + (config.clothStiffness * 4);
+            const falloff = 1 - Math.pow(normalizedDistance, exponent);
+            
+            return Math.max(0, nearestHeight * falloff);
+        }
         
-        return Math.max(0, targetHeight * falloff);
+        return 0;
     }
     
     // Create a 2D grid of points with Y displacement (height)
