@@ -14,11 +14,9 @@ function loadConfig() {
         zSeparation: 200,
         cubeSize: 5,
         influenceRadius: 60,
-        backGridAlpha: 0.5,
-        frontGridAlpha: 1.0,
+        clothAlpha: 0.5,
         shapeShellAlpha: 0.8,
-        ambientGridAlpha: 0.2,
-        interiorAlpha: 0.3,
+        insideShapeAlpha: 0.6,
         shapeType: 'cube',
         renderMode: 'lines',
         pointSize: 3.0
@@ -153,58 +151,35 @@ function isOnShapeShell(i, j, shapeType, size) {
 }
 
 // Grid point classification system
-// Returns: 'back', 'front-cloth', 'shape-interior', 'shape-shell', 'ambient'
+// Returns: 'cloth', 'shape-shell', 'inside-shape'
 function classifyGridPoint(i, j, z, frontPoints, backZ) {
     const frontZ = frontPoints[i][j].z;
+    const isInShape = isInsideShape(i, j, config.shapeType, config.cubeSize);
+    const isOnShell = isOnShapeShell(i, j, config.shapeType, config.cubeSize);
     
-    // Back layer: all points at backZ
-    if (z === backZ) {
-        return 'back';
+    // Check if on shape shell (boundary)
+    if (isOnShell) {
+        return 'shape-shell';
     }
     
-    // Front-cloth layer: points at displaced frontZ
-    if (z === frontZ) {
-        // Check if inside shape volume
-        if (isInsideShape(i, j, config.shapeType, config.cubeSize)) {
-            // Check if on shape shell (boundary)
-            if (isOnShapeShell(i, j, config.shapeType, config.cubeSize)) {
-                return 'shape-shell';
-            }
-            // Interior of shape
-            return 'shape-interior';
-        } else {
-            // Outside shape but has displacement (cloth region)
-            return 'front-cloth';
-        }
+    // Check if inside shape volume
+    if (isInShape) {
+        return 'inside-shape';
     }
     
-    // Intermediate Z slices
-    if ((config.zSeparation > 0 && z > backZ && z < frontZ) ||
-        (config.zSeparation < 0 && z < backZ && z > frontZ)) {
-        // Check if this intermediate point is inside the shape volume
-        if (isInsideShape(i, j, config.shapeType, config.cubeSize)) {
-            return 'shape-interior';
-        } else {
-            return 'ambient';
-        }
-    }
-    
-    return 'ambient';
+    // Everything else is cloth (outside shape with displacement)
+    return 'cloth';
 }
 
 // Map classification to alpha value
 function getPointAlpha(classification) {
     switch(classification) {
-        case 'back':
-            return config.backGridAlpha;
-        case 'front-cloth':
-            return config.frontGridAlpha;
-        case 'shape-interior':
-            return config.interiorAlpha;
+        case 'cloth':
+            return config.clothAlpha;
         case 'shape-shell':
             return config.shapeShellAlpha;
-        case 'ambient':
-            return config.ambientGridAlpha;
+        case 'inside-shape':
+            return config.insideShapeAlpha;
         default:
             return 0.5;
     }
@@ -371,13 +346,13 @@ function updateVisualization() {
         const positions = [];
         const alphas = [];
         
-        // Back layer points
+        // Back layer points (all classified as cloth since they're not displaced)
         for (let i = 0; i <= config.gridDensity; i++) {
             for (let j = 0; j <= config.gridDensity; j++) {
                 const x = (i - config.gridDensity / 2) * spacing;
                 const y = (j - config.gridDensity / 2) * spacing;
                 positions.push(x, y, backZ);
-                alphas.push(config.backGridAlpha);
+                alphas.push(config.clothAlpha);
             }
         }
         
@@ -644,20 +619,14 @@ function initializeUI() {
     document.getElementById('influenceRadiusSlider').value = config.influenceRadius;
     document.getElementById('influenceRadiusValue').textContent = config.influenceRadius + '%';
     
-    document.getElementById('backGridAlphaSlider').value = config.backGridAlpha;
-    document.getElementById('backGridAlphaValue').textContent = config.backGridAlpha.toFixed(1);
-    
-    document.getElementById('frontGridAlphaSlider').value = config.frontGridAlpha;
-    document.getElementById('frontGridAlphaValue').textContent = config.frontGridAlpha.toFixed(1);
+    document.getElementById('clothAlphaSlider').value = config.clothAlpha;
+    document.getElementById('clothAlphaValue').textContent = config.clothAlpha.toFixed(1);
     
     document.getElementById('shapeShellAlphaSlider').value = config.shapeShellAlpha;
     document.getElementById('shapeShellAlphaValue').textContent = config.shapeShellAlpha.toFixed(1);
     
-    document.getElementById('ambientGridAlphaSlider').value = config.ambientGridAlpha;
-    document.getElementById('ambientGridAlphaValue').textContent = config.ambientGridAlpha.toFixed(1);
-    
-    document.getElementById('interiorAlphaSlider').value = config.interiorAlpha;
-    document.getElementById('interiorAlphaValue').textContent = config.interiorAlpha.toFixed(1);
+    document.getElementById('insideShapeAlphaSlider').value = config.insideShapeAlpha;
+    document.getElementById('insideShapeAlphaValue').textContent = config.insideShapeAlpha.toFixed(1);
     
     document.getElementById('pointSizeSlider').value = config.pointSize;
     document.getElementById('pointSizeValue').textContent = config.pointSize.toFixed(1);
@@ -731,16 +700,9 @@ document.getElementById('influenceRadiusSlider').addEventListener('input', (e) =
     saveConfig();
 });
 
-document.getElementById('backGridAlphaSlider').addEventListener('input', (e) => {
-    config.backGridAlpha = parseFloat(e.target.value);
-    document.getElementById('backGridAlphaValue').textContent = config.backGridAlpha.toFixed(1);
-    updateVisualization();
-    saveConfig();
-});
-
-document.getElementById('frontGridAlphaSlider').addEventListener('input', (e) => {
-    config.frontGridAlpha = parseFloat(e.target.value);
-    document.getElementById('frontGridAlphaValue').textContent = config.frontGridAlpha.toFixed(1);
+document.getElementById('clothAlphaSlider').addEventListener('input', (e) => {
+    config.clothAlpha = parseFloat(e.target.value);
+    document.getElementById('clothAlphaValue').textContent = config.clothAlpha.toFixed(1);
     updateVisualization();
     saveConfig();
 });
@@ -752,16 +714,9 @@ document.getElementById('shapeShellAlphaSlider').addEventListener('input', (e) =
     saveConfig();
 });
 
-document.getElementById('ambientGridAlphaSlider').addEventListener('input', (e) => {
-    config.ambientGridAlpha = parseFloat(e.target.value);
-    document.getElementById('ambientGridAlphaValue').textContent = config.ambientGridAlpha.toFixed(1);
-    updateVisualization();
-    saveConfig();
-});
-
-document.getElementById('interiorAlphaSlider').addEventListener('input', (e) => {
-    config.interiorAlpha = parseFloat(e.target.value);
-    document.getElementById('interiorAlphaValue').textContent = config.interiorAlpha.toFixed(1);
+document.getElementById('insideShapeAlphaSlider').addEventListener('input', (e) => {
+    config.insideShapeAlpha = parseFloat(e.target.value);
+    document.getElementById('insideShapeAlphaValue').textContent = config.insideShapeAlpha.toFixed(1);
     updateVisualization();
     saveConfig();
 });
