@@ -405,6 +405,7 @@ function setupUI() {
         document.getElementById('densityValue').textContent = config.gridDensity;
         createCube();
         createFloor(); // Update floor to match new grid spacing
+        createCloth(); // Update cloth to match new grid spacing
     });
     
     document.getElementById('cubeSizeSlider').addEventListener('input', (e) => {
@@ -412,6 +413,7 @@ function setupUI() {
         document.getElementById('cubeSizeValue').textContent = config.cubeSize;
         createCube();
         createFloor(); // Update floor position when cube size changes
+        createCloth(); // Update cloth deformation when cube size changes
     });
     
     document.getElementById('opacitySlider').addEventListener('input', (e) => {
