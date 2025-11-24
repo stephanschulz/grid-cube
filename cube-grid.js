@@ -23,7 +23,8 @@ let config = {
     floorSize: 800,       // Size of the floor plane
     floorOpacity: 0.3,    // Floor grid opacity (density auto-calculated to match cube)
     clothStiffness: 0.5,  // 0 = very soft (gradual drop), 1 = very stiff (steep drop)
-    clothOpacity: 0.6     // Cloth grid opacity
+    clothOpacity: 0.6,    // Cloth grid opacity
+    clothExtension: 3     // How many grid steps the cloth extends from cube edge (0 = clings to cube)
 };
 
 // Initialize Three.js scene
@@ -342,9 +343,11 @@ function createCloth() {
         
         // Outside cube: calculate falloff based on distance
         const distanceFromCube = distanceFromCenter - cubeRadius;
-        const influenceDistance = config.cubeSize * (1 - config.clothStiffness * 0.8);
         
-        if (distanceFromCube > influenceDistance) {
+        // Influence distance is based on clothExtension (in grid steps)
+        const influenceDistance = config.clothExtension * gridSpacing;
+        
+        if (influenceDistance === 0 || distanceFromCube > influenceDistance) {
             return 0; // No displacement beyond influence distance
         }
         
@@ -437,6 +440,12 @@ function setupUI() {
     document.getElementById('clothStiffnessSlider').addEventListener('input', (e) => {
         config.clothStiffness = parseFloat(e.target.value);
         document.getElementById('clothStiffnessValue').textContent = config.clothStiffness.toFixed(2);
+        createCloth();
+    });
+    
+    document.getElementById('clothExtensionSlider').addEventListener('input', (e) => {
+        config.clothExtension = parseInt(e.target.value);
+        document.getElementById('clothExtensionValue').textContent = config.clothExtension;
         createCloth();
     });
     
