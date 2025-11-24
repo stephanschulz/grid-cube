@@ -22,9 +22,12 @@ let config = {
     showCloth: true,      // Show cloth draping
     floorSize: 800,       // Size of the floor plane
     floorOpacity: 0.3,    // Floor grid opacity (density auto-calculated to match cube)
-    clothStiffness: 0.5,  // 0 = very soft (gradual drop), 1 = very stiff (steep drop)
+    clothStiffness: 0,    // 0 = very soft (gradual drop), 1 = very stiff (steep drop)
     clothOpacity: 0.6,    // Cloth grid opacity
-    clothExtension: 3     // How many grid steps the cloth extends from cube edge (0 = clings to cube)
+    clothExtension: 3,    // How many grid steps the cloth extends from cube edge (0 = clings to cube)
+    cubeRotationX: 0,     // Cube rotation around X axis (degrees)
+    cubeRotationY: 0,     // Cube rotation around Y axis (degrees)
+    cubeRotationZ: 0      // Cube rotation around Z axis (degrees)
 };
 
 // Initialize Three.js scene
@@ -59,6 +62,9 @@ function init() {
     // Cube group
     cubeGroup = new THREE.Group();
     scene.add(cubeGroup);
+    
+    // Apply initial rotation
+    updateCubeRotation();
     
     // Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
@@ -149,6 +155,15 @@ function createGridFace(corners, density) {
     }
     
     return group;
+}
+
+/**
+ * Update cube rotation based on config
+ */
+function updateCubeRotation() {
+    cubeGroup.rotation.x = config.cubeRotationX * (Math.PI / 180);
+    cubeGroup.rotation.y = config.cubeRotationY * (Math.PI / 180);
+    cubeGroup.rotation.z = config.cubeRotationZ * (Math.PI / 180);
 }
 
 /**
@@ -322,56 +337,120 @@ function createCloth() {
     const halfX = (numCellsX * gridSpacing) / 2;
     const halfZ = (numCellsZ * gridSpacing) / 2;
     
+    // Create rotation matrices for the cube
+    const rotationMatrix = new THREE.Matrix4();
+    rotationMatrix.makeRotationFromEuler(new THREE.Euler(
+        config.cubeRotationX * (Math.PI / 180),
+        config.cubeRotationY * (Math.PI / 180),
+        config.cubeRotationZ * (Math.PI / 180),
+        'XYZ'
+    ));
+    
+    const inverseRotationMatrix = new THREE.Matrix4();
+    inverseRotationMatrix.copy(rotationMatrix).invert();
+    
     /**
-     * Calculate Y displacement (height) for a point based on its distance from the cube
-     * Points inside or on the cube get full displacement (lifted up)
-     * Points outside get displacement based on distance (with falloff)
-     * Uses smooth interpolation near corners for better visual quality
+     * Ray-cast from above to find where cloth hits the cube surface
+     * Like dropping a cloth point from high up until it touches the cube
      */
     function calculateYDisplacement(x, z) {
-        // Calculate distance from cube center in XZ plane
-        const dx = Math.abs(x);
-        const dz = Math.abs(z);
+        // Start from high above and cast ray downward
+        const rayOrigin = new THREE.Vector3(x, 1000, z);
+        const rayDirection = new THREE.Vector3(0, -1, 0); // Downward
         
-        const cubeRadius = s;
+        // Transform ray into cube's local space
+        const localRayOrigin = rayOrigin.clone().applyMatrix4(inverseRotationMatrix);
+        const localRayDirection = rayDirection.clone().applyMatrix4(inverseRotationMatrix).normalize();
         
-        // Calculate distance from cube boundary using smooth interpolation
-        let distanceFromCube;
+        // Check intersection with cube bounds in local space
+        const cubeMin = new THREE.Vector3(-s, -s, -s);
+        const cubeMax = new THREE.Vector3(s, s, s);
         
-        // Inside cube: negative distance (how far inside)
-        if (dx <= cubeRadius && dz <= cubeRadius) {
-            // Fully inside - full displacement
-            return config.cubeSize;
+        // Ray-box intersection
+        const tMin = new THREE.Vector3();
+        const tMax = new THREE.Vector3();
+        
+        tMin.x = (cubeMin.x - localRayOrigin.x) / localRayDirection.x;
+        tMax.x = (cubeMax.x - localRayOrigin.x) / localRayDirection.x;
+        tMin.y = (cubeMin.y - localRayOrigin.y) / localRayDirection.y;
+        tMax.y = (cubeMax.y - localRayOrigin.y) / localRayDirection.y;
+        tMin.z = (cubeMin.z - localRayOrigin.z) / localRayDirection.z;
+        tMax.z = (cubeMax.z - localRayOrigin.z) / localRayDirection.z;
+        
+        // Swap if needed
+        if (tMin.x > tMax.x) [tMin.x, tMax.x] = [tMax.x, tMin.x];
+        if (tMin.y > tMax.y) [tMin.y, tMax.y] = [tMax.y, tMin.y];
+        if (tMin.z > tMax.z) [tMin.z, tMax.z] = [tMax.z, tMin.z];
+        
+        const tEnter = Math.max(tMin.x, tMin.y, tMin.z);
+        const tExit = Math.min(tMax.x, tMax.y, tMax.z);
+        
+        let hitHeight = 0;
+        
+        // Check if ray hits cube
+        if (tEnter <= tExit && tExit >= 0) {
+            // Ray hits cube - find the entry point (top surface)
+            const hitPoint = localRayOrigin.clone().add(
+                localRayDirection.clone().multiplyScalar(tEnter)
+            );
+            
+            // Transform hit point back to world space
+            const worldHitPoint = hitPoint.clone().applyMatrix4(rotationMatrix);
+            hitHeight = worldHitPoint.y - floorY;
         }
         
-        // Outside cube: calculate smooth distance from nearest edge/corner
-        if (dx <= cubeRadius) {
-            // Outside in Z direction only (near side edge)
-            distanceFromCube = dz - cubeRadius;
-        } else if (dz <= cubeRadius) {
-            // Outside in X direction only (near side edge)
-            distanceFromCube = dx - cubeRadius;
-        } else {
-            // Outside in both directions (near corner)
-            // Use Euclidean distance from corner for smooth interpolation
-            const cornerDx = dx - cubeRadius;
-            const cornerDz = dz - cubeRadius;
-            distanceFromCube = Math.sqrt(cornerDx * cornerDx + cornerDz * cornerDz);
+        // If no hit or hit is below floor, check for falloff zone
+        if (hitHeight <= 0) {
+            // Calculate distance from cube edge in XZ plane
+            const worldPoint = new THREE.Vector3(x, 0, z);
+            const localPoint = worldPoint.clone().applyMatrix4(inverseRotationMatrix);
+            
+            const dx = Math.abs(localPoint.x);
+            const dz = Math.abs(localPoint.z);
+            
+            let distanceFromCube;
+            
+            if (dx <= s && dz <= s) {
+                // Inside cube footprint but no hit - shouldn't happen
+                return 0;
+            }
+            
+            // Calculate distance from cube edge
+            if (dx <= s) {
+                distanceFromCube = dz - s;
+            } else if (dz <= s) {
+                distanceFromCube = dx - s;
+            } else {
+                const cornerDx = dx - s;
+                const cornerDz = dz - s;
+                distanceFromCube = Math.sqrt(cornerDx * cornerDx + cornerDz * cornerDz);
+            }
+            
+            // Apply influence distance
+            const influenceDistance = config.clothExtension * gridSpacing;
+            
+            if (influenceDistance === 0 || distanceFromCube > influenceDistance) {
+                return 0;
+            }
+            
+            // Find the height at the cube edge for falloff
+            const edgePoint = new THREE.Vector3(
+                Math.max(-s, Math.min(s, localPoint.x)),
+                s, // Top of cube
+                Math.max(-s, Math.min(s, localPoint.z))
+            );
+            const worldEdgePoint = edgePoint.clone().applyMatrix4(rotationMatrix);
+            const edgeHeight = worldEdgePoint.y - floorY;
+            
+            // Exponential falloff
+            const normalizedDistance = distanceFromCube / influenceDistance;
+            const exponent = 1 + (config.clothStiffness * 4);
+            const falloff = 1 - Math.pow(normalizedDistance, exponent);
+            
+            return Math.max(0, edgeHeight * falloff);
         }
         
-        // Influence distance is based on clothExtension (in grid steps)
-        const influenceDistance = config.clothExtension * gridSpacing;
-        
-        if (influenceDistance === 0 || distanceFromCube > influenceDistance) {
-            return 0; // No displacement beyond influence distance
-        }
-        
-        // Exponential falloff
-        const normalizedDistance = distanceFromCube / influenceDistance;
-        const exponent = 1 + (config.clothStiffness * 4);
-        const falloff = 1 - Math.pow(normalizedDistance, exponent);
-        
-        return config.cubeSize * falloff;
+        return Math.max(0, hitHeight);
     }
     
     // Create a 2D grid of points with Y displacement (height)
@@ -462,6 +541,27 @@ function setupUI() {
         config.clothExtension = parseInt(e.target.value);
         document.getElementById('clothExtensionValue').textContent = config.clothExtension;
         createCloth();
+    });
+    
+    document.getElementById('cubeRotationXSlider').addEventListener('input', (e) => {
+        config.cubeRotationX = parseInt(e.target.value);
+        document.getElementById('cubeRotationXValue').textContent = config.cubeRotationX + '°';
+        updateCubeRotation();
+        createCloth(); // Update cloth to match rotated cube
+    });
+    
+    document.getElementById('cubeRotationYSlider').addEventListener('input', (e) => {
+        config.cubeRotationY = parseInt(e.target.value);
+        document.getElementById('cubeRotationYValue').textContent = config.cubeRotationY + '°';
+        updateCubeRotation();
+        createCloth(); // Update cloth to match rotated cube
+    });
+    
+    document.getElementById('cubeRotationZSlider').addEventListener('input', (e) => {
+        config.cubeRotationZ = parseInt(e.target.value);
+        document.getElementById('cubeRotationZValue').textContent = config.cubeRotationZ + '°';
+        updateCubeRotation();
+        createCloth(); // Update cloth to match rotated cube
     });
     
     document.getElementById('clothOpacitySlider').addEventListener('input', (e) => {

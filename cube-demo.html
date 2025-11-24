@@ -137,6 +137,30 @@
         
         <div class="control-group">
             <label>
+                Cube Rotation X
+                <span class="value-display" id="cubeRotationXValue">0°</span>
+            </label>
+            <input type="range" id="cubeRotationXSlider" min="-180" max="180" step="5" value="0">
+        </div>
+        
+        <div class="control-group">
+            <label>
+                Cube Rotation Y
+                <span class="value-display" id="cubeRotationYValue">0°</span>
+            </label>
+            <input type="range" id="cubeRotationYSlider" min="-180" max="180" step="5" value="0">
+        </div>
+        
+        <div class="control-group">
+            <label>
+                Cube Rotation Z
+                <span class="value-display" id="cubeRotationZValue">0°</span>
+            </label>
+            <input type="range" id="cubeRotationZSlider" min="-180" max="180" step="5" value="0">
+        </div>
+        
+        <div class="control-group">
+            <label>
                 Line Opacity
                 <span class="value-display" id="opacityValue">0.8</span>
             </label>
@@ -172,9 +196,9 @@
         <div class="control-group">
             <label>
                 Cloth Stiffness
-                <span class="value-display" id="clothStiffnessValue">0.50</span>
+                <span class="value-display" id="clothStiffnessValue">0.00</span>
             </label>
-            <input type="range" id="clothStiffnessSlider" min="0" max="1" step="0.01" value="0.5">
+            <input type="range" id="clothStiffnessSlider" min="0" max="1" step="0.01" value="0">
             <small style="color: #888; font-size: 11px;">0 = soft drape, 1 = steep drop</small>
         </div>
         
