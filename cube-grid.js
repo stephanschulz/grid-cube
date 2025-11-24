@@ -19,8 +19,11 @@ let config = {
     showTop: true,
     showBottom: true,
     showFloor: true,
+    showCloth: true,      // Show cloth draping
     floorSize: 800,       // Size of the floor plane
-    floorOpacity: 0.3     // Floor grid opacity (density auto-calculated to match cube)
+    floorOpacity: 0.3,    // Floor grid opacity (density auto-calculated to match cube)
+    clothStiffness: 0.5,  // 0 = very soft (gradual drop), 1 = very stiff (steep drop)
+    clothOpacity: 0.6     // Cloth grid opacity
 };
 
 // Initialize Three.js scene
@@ -66,6 +69,7 @@ function init() {
     // Initial render
     createCube();
     createFloor();
+    createCloth();
     animate();
 }
 
@@ -281,6 +285,119 @@ function createFloor() {
     scene.add(floorGroup);
 }
 
+/**
+ * Create a single continuous cloth grid layer
+ * The cube "pushes" the grid forward (in Z), creating displacement
+ * Points closer to the cube have more Z displacement, creating a deformation effect
+ */
+function createCloth() {
+    // Remove existing cloth if any
+    const existingCloth = scene.getObjectByName('clothGrid');
+    if (existingCloth) {
+        scene.remove(existingCloth);
+    }
+    
+    if (!config.showCloth) return;
+    
+    const clothGroup = new THREE.Group();
+    clothGroup.name = 'clothGrid';
+    
+    const material = new THREE.LineBasicMaterial({
+        color: 0x4444ff,
+        transparent: true,
+        opacity: config.clothOpacity
+    });
+    
+    // Calculate grid spacing
+    const gridSpacing = config.cubeSize / config.gridDensity;
+    const s = config.cubeSize / 2;
+    
+    // Floor is at Y = -s, same as floor grid
+    const floorY = -s;
+    
+    // Calculate grid dimensions to match floor
+    const numCellsX = Math.floor(config.floorSize / gridSpacing);
+    const numCellsZ = Math.floor(config.floorSize / gridSpacing);
+    const halfX = (numCellsX * gridSpacing) / 2;
+    const halfZ = (numCellsZ * gridSpacing) / 2;
+    
+    /**
+     * Calculate Y displacement (height) for a point based on its distance from the cube
+     * Points inside or on the cube get full displacement (lifted up)
+     * Points outside get displacement based on distance (with falloff)
+     */
+    function calculateYDisplacement(x, z) {
+        // Calculate distance from cube center in XZ plane
+        const dx = Math.abs(x);
+        const dz = Math.abs(z);
+        
+        // Use Chebyshev distance (max of absolute differences) for cube
+        const distanceFromCenter = Math.max(dx, dz);
+        const cubeRadius = s;
+        
+        // If inside or on cube boundary, full displacement
+        if (distanceFromCenter <= cubeRadius) {
+            return config.cubeSize; // Full upward displacement
+        }
+        
+        // Outside cube: calculate falloff based on distance
+        const distanceFromCube = distanceFromCenter - cubeRadius;
+        const influenceDistance = config.cubeSize * (1 - config.clothStiffness * 0.8);
+        
+        if (distanceFromCube > influenceDistance) {
+            return 0; // No displacement beyond influence distance
+        }
+        
+        // Exponential falloff
+        const normalizedDistance = distanceFromCube / influenceDistance;
+        const exponent = 1 + (config.clothStiffness * 4);
+        const falloff = 1 - Math.pow(normalizedDistance, exponent);
+        
+        return config.cubeSize * falloff;
+    }
+    
+    // Create a 2D grid of points with Y displacement (height)
+    const clothPoints = [];
+    for (let i = 0; i <= numCellsX; i++) {
+        clothPoints[i] = [];
+        const x = -halfX + (i * gridSpacing);
+        
+        for (let j = 0; j <= numCellsZ; j++) {
+            const z = -halfZ + (j * gridSpacing);
+            
+            // Calculate Y displacement (height) based on distance from cube
+            const yDisplacement = calculateYDisplacement(x, z);
+            
+            // Position: floor level, but lifted up in Y by displacement
+            clothPoints[i][j] = new THREE.Vector3(x, floorY + yDisplacement, z);
+        }
+    }
+    
+    // Create horizontal lines (constant j, varying i)
+    for (let j = 0; j <= numCellsZ; j++) {
+        const points = [];
+        for (let i = 0; i <= numCellsX; i++) {
+            points.push(clothPoints[i][j]);
+        }
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const line = new THREE.Line(geometry, material);
+        clothGroup.add(line);
+    }
+    
+    // Create vertical lines (constant i, varying j)
+    for (let i = 0; i <= numCellsX; i++) {
+        const points = [];
+        for (let j = 0; j <= numCellsZ; j++) {
+            points.push(clothPoints[i][j]);
+        }
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const line = new THREE.Line(geometry, material);
+        clothGroup.add(line);
+    }
+    
+    scene.add(clothGroup);
+}
+
 // UI Controls
 function setupUI() {
     document.getElementById('densitySlider').addEventListener('input', (e) => {
@@ -315,6 +432,18 @@ function setupUI() {
         createFloor();
     });
     
+    document.getElementById('clothStiffnessSlider').addEventListener('input', (e) => {
+        config.clothStiffness = parseFloat(e.target.value);
+        document.getElementById('clothStiffnessValue').textContent = config.clothStiffness.toFixed(2);
+        createCloth();
+    });
+    
+    document.getElementById('clothOpacitySlider').addEventListener('input', (e) => {
+        config.clothOpacity = parseFloat(e.target.value);
+        document.getElementById('clothOpacityValue').textContent = config.clothOpacity.toFixed(1);
+        createCloth();
+    });
+    
     // Face toggles
     ['Front', 'Back', 'Left', 'Right', 'Top', 'Bottom'].forEach(face => {
         const checkbox = document.getElementById(`show${face}`);
@@ -329,6 +458,12 @@ function setupUI() {
     document.getElementById('showFloor').addEventListener('change', (e) => {
         config.showFloor = e.target.checked;
         createFloor();
+    });
+    
+    // Cloth toggle
+    document.getElementById('showCloth').addEventListener('change', (e) => {
+        config.showCloth = e.target.checked;
+        createCloth();
     });
     
     document.getElementById('resetCameraBtn').addEventListener('click', () => {

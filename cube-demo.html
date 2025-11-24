@@ -161,6 +161,23 @@
         </div>
         
         <div class="control-group">
+            <label>
+                Cloth Stiffness
+                <span class="value-display" id="clothStiffnessValue">0.50</span>
+            </label>
+            <input type="range" id="clothStiffnessSlider" min="0" max="1" step="0.01" value="0.5">
+            <small style="color: #888; font-size: 11px;">0 = soft drape, 1 = steep drop</small>
+        </div>
+        
+        <div class="control-group">
+            <label>
+                Cloth Opacity
+                <span class="value-display" id="clothOpacityValue">0.6</span>
+            </label>
+            <input type="range" id="clothOpacitySlider" min="0" max="1" step="0.1" value="0.6">
+        </div>
+        
+        <div class="control-group">
             <div class="section-title">Visible Faces</div>
             <div class="checkbox-group">
                 <div class="checkbox-item">
@@ -190,6 +207,10 @@
                 <div class="checkbox-item">
                     <input type="checkbox" id="showFloor" checked>
                     <label for="showFloor">Floor Plane</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="showCloth" checked>
+                    <label for="showCloth">Cloth Drape</label>
                 </div>
             </div>
         </div>
