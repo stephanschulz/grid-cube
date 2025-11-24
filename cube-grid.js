@@ -326,23 +326,38 @@ function createCloth() {
      * Calculate Y displacement (height) for a point based on its distance from the cube
      * Points inside or on the cube get full displacement (lifted up)
      * Points outside get displacement based on distance (with falloff)
+     * Uses smooth interpolation near corners for better visual quality
      */
     function calculateYDisplacement(x, z) {
         // Calculate distance from cube center in XZ plane
         const dx = Math.abs(x);
         const dz = Math.abs(z);
         
-        // Use Chebyshev distance (max of absolute differences) for cube
-        const distanceFromCenter = Math.max(dx, dz);
         const cubeRadius = s;
         
-        // If inside or on cube boundary, full displacement
-        if (distanceFromCenter <= cubeRadius) {
-            return config.cubeSize; // Full upward displacement
+        // Calculate distance from cube boundary using smooth interpolation
+        let distanceFromCube;
+        
+        // Inside cube: negative distance (how far inside)
+        if (dx <= cubeRadius && dz <= cubeRadius) {
+            // Fully inside - full displacement
+            return config.cubeSize;
         }
         
-        // Outside cube: calculate falloff based on distance
-        const distanceFromCube = distanceFromCenter - cubeRadius;
+        // Outside cube: calculate smooth distance from nearest edge/corner
+        if (dx <= cubeRadius) {
+            // Outside in Z direction only (near side edge)
+            distanceFromCube = dz - cubeRadius;
+        } else if (dz <= cubeRadius) {
+            // Outside in X direction only (near side edge)
+            distanceFromCube = dx - cubeRadius;
+        } else {
+            // Outside in both directions (near corner)
+            // Use Euclidean distance from corner for smooth interpolation
+            const cornerDx = dx - cubeRadius;
+            const cornerDz = dz - cubeRadius;
+            distanceFromCube = Math.sqrt(cornerDx * cornerDx + cornerDz * cornerDz);
+        }
         
         // Influence distance is based on clothExtension (in grid steps)
         const influenceDistance = config.clothExtension * gridSpacing;
