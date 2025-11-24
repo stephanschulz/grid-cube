@@ -1,0 +1,15 @@
+{
+  "name": "grid_cube",
+  "version": "1.0.0",
+  "main": "script.js",
+  "scripts": {
+    "test": "vitest --run"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "vitest": "^4.0.13"
+  }
+}

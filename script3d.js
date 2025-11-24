@@ -108,67 +108,151 @@ function animate() {
     renderer.render(scene, camera);
 }
 
-// Shape abstraction functions
-function isInsideCube(i, j, cubeSize) {
-    const dx = Math.abs(i - config.selectedPointX);
-    const dy = Math.abs(j - config.selectedPointY);
+// Pure geometric classification functions
+// These functions don't depend on global config
+// Note: These functions are also exported in classification.js for testing
+
+/**
+ * Check if a point is inside a cube shape
+ * @param {number} i - Grid X coordinate
+ * @param {number} j - Grid Y coordinate
+ * @param {number} centerX - Cube center X coordinate
+ * @param {number} centerY - Cube center Y coordinate
+ * @param {number} cubeSize - Size of the cube
+ * @returns {boolean}
+ */
+function isInsideCube(i, j, centerX, centerY, cubeSize) {
+    const dx = Math.abs(i - centerX);
+    const dy = Math.abs(j - centerY);
     const gridDistance = Math.max(dx, dy);
     return gridDistance <= cubeSize - 1;
 }
 
-function isOnCubeEdge(i, j, cubeSize) {
-    const dx = Math.abs(i - config.selectedPointX);
-    const dy = Math.abs(j - config.selectedPointY);
+/**
+ * Check if a point is on the edge of a cube shape
+ * @param {number} i - Grid X coordinate
+ * @param {number} j - Grid Y coordinate
+ * @param {number} centerX - Cube center X coordinate
+ * @param {number} centerY - Cube center Y coordinate
+ * @param {number} cubeSize - Size of the cube
+ * @returns {boolean}
+ */
+function isOnCubeEdge(i, j, centerX, centerY, cubeSize) {
+    const dx = Math.abs(i - centerX);
+    const dy = Math.abs(j - centerY);
     const maxDist = Math.max(dx, dy);
     return maxDist === cubeSize - 1;
 }
 
-function isInsideSphere(i, j, sphereRadius) {
-    const dx = i - config.selectedPointX;
-    const dy = j - config.selectedPointY;
+/**
+ * Check if a point is inside a sphere shape
+ * @param {number} i - Grid X coordinate
+ * @param {number} j - Grid Y coordinate
+ * @param {number} centerX - Sphere center X coordinate
+ * @param {number} centerY - Sphere center Y coordinate
+ * @param {number} sphereRadius - Radius of the sphere
+ * @returns {boolean}
+ */
+function isInsideSphere(i, j, centerX, centerY, sphereRadius) {
+    const dx = i - centerX;
+    const dy = j - centerY;
     const distance = Math.sqrt(dx * dx + dy * dy);
     return distance <= sphereRadius - 1;
 }
 
-function isOnSphereSurface(i, j, sphereRadius) {
-    const dx = i - config.selectedPointX;
-    const dy = j - config.selectedPointY;
+/**
+ * Check if a point is on the surface of a sphere shape
+ * @param {number} i - Grid X coordinate
+ * @param {number} j - Grid Y coordinate
+ * @param {number} centerX - Sphere center X coordinate
+ * @param {number} centerY - Sphere center Y coordinate
+ * @param {number} sphereRadius - Radius of the sphere
+ * @returns {boolean}
+ */
+function isOnSphereSurface(i, j, centerX, centerY, sphereRadius) {
+    const dx = i - centerX;
+    const dy = j - centerY;
     const distance = Math.sqrt(dx * dx + dy * dy);
-    // Surface is within 0.5 grid units of the radius
+    // Surface is within 0.7 grid units of the radius
     return Math.abs(distance - (sphereRadius - 1)) <= 0.7;
 }
 
-function isInsideShape(i, j, shapeType, size) {
-    if (shapeType === 'cube') return isInsideCube(i, j, size);
-    if (shapeType === 'sphere') return isInsideSphere(i, j, size);
+/**
+ * Check if a point is inside a shape (cube or sphere)
+ * @param {number} i - Grid X coordinate
+ * @param {number} j - Grid Y coordinate
+ * @param {string} shapeType - 'cube' or 'sphere'
+ * @param {number} size - Size of the shape
+ * @param {number} centerX - Shape center X coordinate
+ * @param {number} centerY - Shape center Y coordinate
+ * @returns {boolean}
+ */
+function isInsideShape(i, j, shapeType, size, centerX, centerY) {
+    if (shapeType === 'cube') return isInsideCube(i, j, centerX, centerY, size);
+    if (shapeType === 'sphere') return isInsideSphere(i, j, centerX, centerY, size);
     return false;
 }
 
-function isOnShapeShell(i, j, shapeType, size) {
-    if (shapeType === 'cube') return isOnCubeEdge(i, j, size);
-    if (shapeType === 'sphere') return isOnSphereSurface(i, j, size);
+/**
+ * Check if a point is on the shell (boundary) of a shape
+ * @param {number} i - Grid X coordinate
+ * @param {number} j - Grid Y coordinate
+ * @param {string} shapeType - 'cube' or 'sphere'
+ * @param {number} size - Size of the shape
+ * @param {number} centerX - Shape center X coordinate
+ * @param {number} centerY - Shape center Y coordinate
+ * @returns {boolean}
+ */
+function isOnShapeShell(i, j, shapeType, size, centerX, centerY) {
+    if (shapeType === 'cube') return isOnCubeEdge(i, j, centerX, centerY, size);
+    if (shapeType === 'sphere') return isOnSphereSurface(i, j, centerX, centerY, size);
     return false;
 }
 
-// Grid point classification system
-// Returns: 'cloth', 'shape-shell', 'inside-shape'
-function classifyGridPoint(i, j, z, frontPoints, backZ) {
-    const frontZ = frontPoints[i][j].z;
-    const isInShape = isInsideShape(i, j, config.shapeType, config.cubeSize);
-    const isOnShell = isOnShapeShell(i, j, config.shapeType, config.cubeSize);
+/**
+ * Check if a point is in the cloth region (outside shape but with displacement)
+ * @param {number} i - Grid X coordinate
+ * @param {number} j - Grid Y coordinate
+ * @param {Array} frontGrid - 2D array of front grid points
+ * @returns {boolean}
+ */
+function isInClothRegion(i, j, frontGrid) {
+    // A point is in the cloth region if it has displacement > threshold
+    const point = frontGrid[i][j];
+    return Math.abs(point.pull) > 0.1;
+}
+
+/**
+ * Classify a grid point into one of the regions
+ * @param {number} i - Grid X coordinate
+ * @param {number} j - Grid Y coordinate
+ * @param {number} z - Z coordinate of the point
+ * @param {Array} frontGrid - 2D array of front grid points
+ * @param {Object} config - Configuration object with shapeType, cubeSize, selectedPointX, selectedPointY
+ * @returns {string} - 'shape-shell', 'inside-shape', or 'cloth'
+ */
+function classifyPoint(i, j, z, frontGrid, config) {
+    const { shapeType, cubeSize, selectedPointX, selectedPointY } = config;
     
     // Check if on shape shell (boundary)
+    const isOnShell = isOnShapeShell(i, j, shapeType, cubeSize, selectedPointX, selectedPointY);
     if (isOnShell) {
         return 'shape-shell';
     }
     
     // Check if inside shape volume
+    const isInShape = isInsideShape(i, j, shapeType, cubeSize, selectedPointX, selectedPointY);
     if (isInShape) {
         return 'inside-shape';
     }
     
     // Everything else is cloth (outside shape with displacement)
     return 'cloth';
+}
+
+// Legacy wrapper for backward compatibility
+function classifyGridPoint(i, j, z, frontPoints, backZ) {
+    return classifyPoint(i, j, z, frontPoints, config);
 }
 
 // Map classification to alpha value

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Cube Grid - 6 Faces</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #1a1a1a;
+            overflow: hidden;
+        }
+        
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            min-width: 280px;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+        }
+        
+        .controls h2 {
+            margin: 0 0 15px 0;
+            font-size: 18px;
+            color: #333;
+        }
+        
+        .control-group {
+            margin-bottom: 15px;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #555;
+        }
+        
+        .control-group input[type="range"] {
+            width: 100%;
+        }
+        
+        .control-group input[type="checkbox"] {
+            margin-right: 8px;
+        }
+        
+        .control-group button {
+            width: 100%;
+            padding: 10px;
+            background: #333;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        
+        .control-group button:hover {
+            background: #555;
+        }
+        
+        .value-display {
+            display: inline-block;
+            float: right;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+        }
+        
+        .section-title {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    
+    <div class="controls">
+        <h2>Simple Cube Grid</h2>
+        
+        <div class="control-group">
+            <label>
+                Grid Density
+                <span class="value-display" id="densityValue">10</span>
+            </label>
+            <input type="range" id="densitySlider" min="2" max="30" step="1" value="10">
+        </div>
+        
+        <div class="control-group">
+            <label>
+                Cube Size
+                <span class="value-display" id="cubeSizeValue">300</span>
+            </label>
+            <input type="range" id="cubeSizeSlider" min="100" max="500" step="10" value="300">
+        </div>
+        
+        <div class="control-group">
+            <label>
+                Line Opacity
+                <span class="value-display" id="opacityValue">0.8</span>
+            </label>
+            <input type="range" id="opacitySlider" min="0" max="1" step="0.1" value="0.8">
+        </div>
+        
+        <div class="control-group">
+            <label>
+                Floor Size
+                <span class="value-display" id="floorSizeValue">800</span>
+            </label>
+            <input type="range" id="floorSizeSlider" min="400" max="1200" step="50" value="800">
+            <small style="color: #888; font-size: 11px;">Grid spacing matches cube</small>
+        </div>
+        
+        <div class="control-group">
+            <label>
+                Floor Opacity
+                <span class="value-display" id="floorOpacityValue">0.3</span>
+            </label>
+            <input type="range" id="floorOpacitySlider" min="0" max="1" step="0.1" value="0.3">
+        </div>
+        
+        <div class="control-group">
+            <div class="section-title">Visible Faces</div>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="showFront" checked>
+                    <label for="showFront">Front</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="showBack" checked>
+                    <label for="showBack">Back</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="showLeft" checked>
+                    <label for="showLeft">Left</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="showRight" checked>
+                    <label for="showRight">Right</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="showTop" checked>
+                    <label for="showTop">Top</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="showBottom" checked>
+                    <label for="showBottom">Bottom</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="showFloor" checked>
+                    <label for="showFloor">Floor Plane</label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <button id="resetCameraBtn">Reset Camera</button>
+        </div>
+    </div>
+    
+    <div class="info">
+        🖱️ Left-click & drag to rotate | Right-click & drag to pan | Scroll to zoom
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="cube-grid.js"></script>
+</body>
+</html>
