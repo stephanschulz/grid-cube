@@ -456,19 +456,144 @@ function createCloth() {
     }
     
     // Create a 2D grid of points with Y displacement (height)
+    // First pass: calculate ideal heights based on cube surface
+    const idealHeights = [];
+    for (let i = 0; i <= numCellsX; i++) {
+        idealHeights[i] = [];
+        const x = -halfX + (i * gridSpacing);
+        
+        for (let j = 0; j <= numCellsZ; j++) {
+            const z = -halfZ + (j * gridSpacing);
+            idealHeights[i][j] = calculateYDisplacement(x, z);
+        }
+    }
+    
+    // Second pass: apply stiffness constraint to smooth the cloth
+    // Use Laplacian smoothing to create natural draping
     const clothPoints = [];
+    const maxIterations = 20; // More iterations for better smoothing
+    
+    // Copy ideal heights as starting point
+    const heights = idealHeights.map(row => [...row]);
+    
+    // Apply smoothing through iterative relaxation
+    // Stiffness controls how much we smooth vs preserve original heights
+    const smoothingFactor = config.clothStiffness; // 0 = no smoothing, 1 = maximum smoothing
+    
+    // Maximum allowed height difference between adjacent grid points
+    // This prevents sharp spikes and ensures smooth cloth appearance
+    const maxHeightDiff = gridSpacing * 1.5; // Allow up to 1.5x grid spacing height difference
+    
+    for (let iter = 0; iter < maxIterations; iter++) {
+        const newHeights = heights.map(row => [...row]);
+        
+        for (let i = 0; i <= numCellsX; i++) {
+            for (let j = 0; j <= numCellsZ; j++) {
+                const currentHeight = heights[i][j];
+                const idealHeight = idealHeights[i][j];
+                
+                // Calculate average of neighboring heights (Laplacian smoothing)
+                let neighborSum = 0;
+                let neighborCount = 0;
+                
+                // Check all 4 neighbors
+                if (i > 0) {
+                    neighborSum += heights[i - 1][j];
+                    neighborCount++;
+                }
+                if (i < numCellsX) {
+                    neighborSum += heights[i + 1][j];
+                    neighborCount++;
+                }
+                if (j > 0) {
+                    neighborSum += heights[i][j - 1];
+                    neighborCount++;
+                }
+                if (j < numCellsZ) {
+                    neighborSum += heights[i][j + 1];
+                    neighborCount++;
+                }
+                
+                const neighborAverage = neighborCount > 0 ? neighborSum / neighborCount : currentHeight;
+                
+                // Blend between current height and neighbor average based on stiffness
+                // Higher stiffness = more smoothing toward neighbor average
+                const smoothedHeight = currentHeight + smoothingFactor * (neighborAverage - currentHeight);
+                
+                // Always respect the ideal height as a minimum (cloth can't go below the cube)
+                newHeights[i][j] = Math.max(smoothedHeight, idealHeight);
+            }
+        }
+        
+        // Update heights for next iteration
+        for (let i = 0; i <= numCellsX; i++) {
+            for (let j = 0; j <= numCellsZ; j++) {
+                heights[i][j] = newHeights[i][j];
+            }
+        }
+    }
+    
+    // Third pass: enforce maximum height difference constraint
+    // This ensures no neighboring points have excessive height differences
+    const constraintIterations = 10;
+    for (let iter = 0; iter < constraintIterations; iter++) {
+        const newHeights = heights.map(row => [...row]);
+        
+        for (let i = 0; i <= numCellsX; i++) {
+            for (let j = 0; j <= numCellsZ; j++) {
+                const currentHeight = heights[i][j];
+                const idealHeight = idealHeights[i][j];
+                let maxNeighborHeight = currentHeight;
+                
+                // Find the maximum height among neighbors
+                if (i > 0) {
+                    maxNeighborHeight = Math.max(maxNeighborHeight, heights[i - 1][j]);
+                }
+                if (i < numCellsX) {
+                    maxNeighborHeight = Math.max(maxNeighborHeight, heights[i + 1][j]);
+                }
+                if (j > 0) {
+                    maxNeighborHeight = Math.max(maxNeighborHeight, heights[i][j - 1]);
+                }
+                if (j < numCellsZ) {
+                    maxNeighborHeight = Math.max(maxNeighborHeight, heights[i][j + 1]);
+                }
+                
+                // If current height is too far above neighbors, bring it down
+                if (currentHeight > maxNeighborHeight + maxHeightDiff) {
+                    newHeights[i][j] = Math.max(maxNeighborHeight + maxHeightDiff, idealHeight);
+                }
+                
+                // If current height is too far below neighbors, bring it up
+                const minNeighborHeight = Math.min(
+                    i > 0 ? heights[i - 1][j] : Infinity,
+                    i < numCellsX ? heights[i + 1][j] : Infinity,
+                    j > 0 ? heights[i][j - 1] : Infinity,
+                    j < numCellsZ ? heights[i][j + 1] : Infinity
+                );
+                
+                if (minNeighborHeight !== Infinity && currentHeight < minNeighborHeight - maxHeightDiff) {
+                    newHeights[i][j] = Math.max(minNeighborHeight - maxHeightDiff, idealHeight);
+                }
+            }
+        }
+        
+        // Update heights for next iteration
+        for (let i = 0; i <= numCellsX; i++) {
+            for (let j = 0; j <= numCellsZ; j++) {
+                heights[i][j] = newHeights[i][j];
+            }
+        }
+    }
+    
+    // Create final cloth points with constrained heights
     for (let i = 0; i <= numCellsX; i++) {
         clothPoints[i] = [];
         const x = -halfX + (i * gridSpacing);
         
         for (let j = 0; j <= numCellsZ; j++) {
             const z = -halfZ + (j * gridSpacing);
-            
-            // Calculate Y displacement (height) based on distance from cube
-            const yDisplacement = calculateYDisplacement(x, z);
-            
-            // Position: floor level, but lifted up in Y by displacement
-            clothPoints[i][j] = new THREE.Vector3(x, floorY + yDisplacement, z);
+            clothPoints[i][j] = new THREE.Vector3(x, floorY + heights[i][j], z);
         }
     }
     
