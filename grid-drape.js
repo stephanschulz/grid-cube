@@ -529,8 +529,8 @@ function updateVisualization() {
         }
     }
 
-    // Render ONLY the drape surface (significantly elevated points only)
-    const frontGrid = createGrid(frontPoints, 0x333333, config.gridOpacity, config.lineThickness, backZ);
+    // Render the full drape surface (including flat parts)
+    const frontGrid = createGrid(frontPoints, 0x333333, config.gridOpacity, config.lineThickness, null);
     frontGridGroup.add(frontGrid);
 
     // Render the 3D shape's walls with grids
