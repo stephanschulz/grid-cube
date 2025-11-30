@@ -11,7 +11,6 @@ let config = {
     gridDensity: 35,
     cubeX: 0, // Centered at 0
     cubeY: 0, // Centered at 0
-    zSeparation: 250,
     cubeSize: 5, // Must be odd to align with grid
     influenceRadius: 70,
     influenceRadius: 70,
@@ -116,10 +115,10 @@ function updateColliderMesh(spacing, backZ) {
     // Size
     let geometry;
     if (config.shapeType === 'cube') {
-        // Cube size is now based on gridDivisions * spacing
+        // Cube size is now based on gridDivisions * spacing for all dimensions
         const cubeWidth = config.cubeSize * spacing;
         const cubeHeight = config.cubeSize * spacing;
-        const cubeDepth = config.zSeparation;
+        const cubeDepth = config.cubeSize * spacing; // Use cubeSize for depth too
         geometry = new THREE.BoxGeometry(cubeWidth, cubeHeight, cubeDepth);
     } else {
         const radius = config.cubeSize * spacing * 0.6;
@@ -134,22 +133,20 @@ function updateColliderMesh(spacing, backZ) {
     const x = config.cubeX * spacing;
     const y = config.cubeY * spacing;
 
-    // The mesh should be positioned so its "bottom" (or center) relates to backZ
-    // We want it to protrude from backZ towards +Z
-    // For a box of height H, center should be at backZ + H/2
+    // Rotation (convert degrees to radians)
+    colliderMesh.rotation.x = config.rotationX * Math.PI / 180;
+    colliderMesh.rotation.y = config.rotationY * Math.PI / 180;
+    colliderMesh.rotation.z = config.rotationZ * Math.PI / 180;
 
+    // Position - center of cube
+    const cubeDepth = config.cubeSize * spacing;
     if (config.shapeType === 'cube') {
-        colliderMesh.position.set(x, y, backZ + config.zSeparation / 2);
+        colliderMesh.position.set(x, y, backZ + cubeDepth / 2);
     } else {
         // For sphere, its center is at backZ + radius
         const radius = config.cubeSize * spacing * 0.6;
         colliderMesh.position.set(x, y, backZ + radius);
     }
-
-    // Rotation (convert degrees to radians)
-    colliderMesh.rotation.x = config.rotationX * Math.PI / 180;
-    colliderMesh.rotation.y = config.rotationY * Math.PI / 180;
-    colliderMesh.rotation.z = config.rotationZ * Math.PI / 180;
 
     colliderMesh.updateMatrixWorld();
     scene.add(colliderMesh);
@@ -237,9 +234,10 @@ function createShapeWalls(spacing, backZ) {
     let shapeCenterZ;
 
     if (config.shapeType === 'cube') {
-        shapeCenterZ = backZ + config.zSeparation / 2;
+        const cubeDepth = gridDivisions * size;
+        shapeCenterZ = backZ + cubeDepth / 2;
     } else {
-        shapeCenterZ = backZ + gridDivisions * size * 0.6; // For sphere, size * 1.2 is its radius
+        shapeCenterZ = backZ + gridDivisions * size * 0.6;
     }
 
     // We generate vertices relative to (0,0,0) so we can rotate around the center
@@ -249,10 +247,10 @@ function createShapeWalls(spacing, backZ) {
     const localZ = 0;
 
     if (config.shapeType === 'cube') {
-        // Cube dimensions: width and height based on gridDivisions, depth = zSeparation
+        // Cube dimensions: all based on gridDivisions for a true cube
         const cubeWidth = gridDivisions * size;
         const cubeHeight = gridDivisions * size;
-        const cubeDepth = config.zSeparation;
+        const cubeDepth = gridDivisions * size; // Same as width and height
         const halfWidth = cubeWidth / 2;
         const halfHeight = cubeHeight / 2;
         const halfDepth = cubeDepth / 2;
@@ -584,7 +582,6 @@ function initializeUI() {
     });
     positionFolder.add(config, 'cubeX', -17, 17, 1).name('Cube Center X').onChange(updateVisualization);
     positionFolder.add(config, 'cubeY', -17, 17, 1).name('Cube Center Y').onChange(updateVisualization);
-    positionFolder.add(config, 'zSeparation', 100, 400, 10).name('Depth (Z)').onChange(updateVisualization);
     positionFolder.add(config, 'cubeSize', 3, 15, 1).name('Cube Size').onChange((value) => {
         // Force to nearest odd number
         const rounded = Math.round(value);
