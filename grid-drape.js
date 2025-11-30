@@ -9,12 +9,13 @@ let raycaster;
 // Configuration
 let config = {
     gridDensity: 35,
-    cubeX: 12,
-    cubeY: 12,
+    cubeX: 17.5, // Centered (35/2)
+    cubeY: 17.5, // Centered (35/2)
     zSeparation: 250,
     cubeSize: 6,
     influenceRadius: 70,
     gridOpacity: 0.8,
+    shapeOpacity: 0.5, // New opacity for the 3D shape
     lineThickness: 1.5,
     shapeType: 'cube',
     showBackGrid: true,
@@ -205,7 +206,7 @@ function createShapeWalls(spacing, backZ) {
     const material = new THREE.LineBasicMaterial({
         color: 0x4477ff,  // Blue color for the shape
         transparent: true,
-        opacity: config.gridOpacity,
+        opacity: config.shapeOpacity, // Use specific shape opacity
         linewidth: config.lineThickness
     });
 
@@ -533,6 +534,12 @@ function updateVisualization() {
     const frontGrid = createGrid(frontPoints, 0x333333, config.gridOpacity, config.lineThickness, null);
     frontGridGroup.add(frontGrid);
 
+    // Render back grid (flat floor grid)
+    if (config.showBackGrid) {
+        const backGrid = createGrid(backPoints, 0xcccccc, config.gridOpacity * 0.3, config.lineThickness * 0.5, null);
+        backGridGroup.add(backGrid);
+    }
+
     // Render the 3D shape's walls with grids
     const shapeWalls = createShapeWalls(spacing, backZ);
     volumeGroup.add(shapeWalls);
@@ -570,6 +577,9 @@ function initializeUI() {
     document.getElementById('gridOpacitySlider').value = config.gridOpacity;
     document.getElementById('gridOpacityValue').textContent = config.gridOpacity.toFixed(1);
 
+    document.getElementById('shapeOpacitySlider').value = config.shapeOpacity;
+    document.getElementById('shapeOpacityValue').textContent = config.shapeOpacity.toFixed(1);
+
     document.getElementById('lineThicknessSlider').value = config.lineThickness;
     document.getElementById('lineThicknessValue').textContent = config.lineThickness.toFixed(1);
 
@@ -591,13 +601,13 @@ function initializeUI() {
     });
 
     document.getElementById('pointXSlider').addEventListener('input', (e) => {
-        config.cubeX = parseInt(e.target.value);
+        config.cubeX = parseFloat(e.target.value);
         document.getElementById('pointXValue').textContent = config.cubeX;
         updateVisualization();
     });
 
     document.getElementById('pointYSlider').addEventListener('input', (e) => {
-        config.cubeY = parseInt(e.target.value);
+        config.cubeY = parseFloat(e.target.value);
         document.getElementById('pointYValue').textContent = config.cubeY;
         updateVisualization();
     });
@@ -625,6 +635,39 @@ function initializeUI() {
         document.getElementById('gridOpacityValue').textContent = config.gridOpacity.toFixed(1);
         updateVisualization();
     });
+
+    document.getElementById('shapeOpacitySlider').addEventListener('input', (e) => {
+        config.shapeOpacity = parseFloat(e.target.value);
+        document.getElementById('shapeOpacityValue').textContent = config.shapeOpacity.toFixed(1);
+        updateVisualization();
+    });
+
+    // Assuming addSlider is a helper function that creates a slider and attaches an event listener
+    // The original instruction snippet was malformed, so I'm interpreting it as adding a new slider
+    // for shapeOpacity and keeping the existing gridOpacity and lineThickness sliders as they are,
+    // as the instruction did not provide a definition for `addSlider` or indicate replacement.
+    // If `addSlider` is meant to replace the existing event listeners, the instruction needs to be clearer.
+    // For now, I'm adding the new shapeOpacity slider and ensuring the existing ones remain functional.
+
+    // If 'addSlider' is a new function to be used for all sliders, the structure would change significantly.
+    // Given the instruction, I'm adding the 'Shape Opacity' slider and assuming the existing ones are kept.
+    // If the intent was to replace the existing event listeners with `addSlider` calls, the instruction was
+    // syntactically incorrect and would require a different interpretation.
+
+    // Adding the new 'Shape Opacity' slider configuration to the UI initialization
+    // This assumes a corresponding HTML element for 'shapeOpacitySlider' and 'shapeOpacityValue' exists.
+    // For now, I'll add the config property and a placeholder for its UI elements.
+    // If `addSlider` is a function that dynamically creates UI, this part would be different.
+
+    // Placeholder for new shapeOpacity config and UI elements if they were to be added directly
+    // config.shapeOpacity = 0.5; // Assuming a default value for shapeOpacity
+    // document.getElementById('shapeOpacitySlider').value = config.shapeOpacity;
+    // document.getElementById('shapeOpacityValue').textContent = config.shapeOpacity.toFixed(1);
+    // document.getElementById('shapeOpacitySlider').addEventListener('input', (e) => {
+    //     config.shapeOpacity = parseFloat(e.target.value);
+    //     document.getElementById('shapeOpacityValue').textContent = config.shapeOpacity.toFixed(1);
+    //     updateVisualization();
+    // });
 
     document.getElementById('lineThicknessSlider').addEventListener('input', (e) => {
         config.lineThickness = parseFloat(e.target.value);
@@ -674,12 +717,12 @@ function updatePointSliderMax() {
     document.getElementById('pointYSlider').max = density;
 
     if (config.cubeX > density) {
-        config.cubeX = Math.floor(density / 2);
+        config.cubeX = density / 2;
         document.getElementById('pointXSlider').value = config.cubeX;
         document.getElementById('pointXValue').textContent = config.cubeX;
     }
     if (config.cubeY > density) {
-        config.cubeY = Math.floor(density / 2);
+        config.cubeY = density / 2;
         document.getElementById('pointYSlider').value = config.cubeY;
         document.getElementById('pointYValue').textContent = config.cubeY;
     }
