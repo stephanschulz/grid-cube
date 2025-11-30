@@ -9,8 +9,8 @@ let raycaster;
 // Configuration
 let config = {
     gridDensity: 35,
-    cubeX: 17.5, // Centered (35/2)
-    cubeY: 17.5, // Centered (35/2)
+    cubeX: 0, // Centered at 0
+    cubeY: 0, // Centered at 0
     zSeparation: 250,
     cubeSize: 6,
     influenceRadius: 70,
@@ -123,8 +123,9 @@ function updateColliderMesh(spacing, backZ) {
     colliderMesh = new THREE.Mesh(geometry, material);
 
     // Position
-    const x = (config.cubeX - config.gridDensity / 2) * spacing;
-    const y = (config.cubeY - config.gridDensity / 2) * spacing;
+    // cubeX and cubeY are now relative to center (0,0)
+    const x = config.cubeX * spacing;
+    const y = config.cubeY * spacing;
 
     // The mesh should be positioned so its "bottom" (or center) relates to backZ
     // We want it to protrude from backZ towards +Z
@@ -214,8 +215,9 @@ function createShapeWalls(spacing, backZ) {
     const size = config.cubeSize * spacing;
 
     // Calculate shape center (must match updateColliderMesh)
-    const shapeCenterX = (config.cubeX - config.gridDensity / 2) * spacing;
-    const shapeCenterY = (config.cubeY - config.gridDensity / 2) * spacing;
+    // cubeX and cubeY are now relative to center (0,0)
+    const shapeCenterX = config.cubeX * spacing;
+    const shapeCenterY = config.cubeY * spacing;
     let shapeCenterZ;
 
     if (config.shapeType === 'cube') {
@@ -713,17 +715,25 @@ function initializeUI() {
 // Update point slider max values when density changes
 function updatePointSliderMax() {
     const density = config.gridDensity;
-    document.getElementById('pointXSlider').max = density;
-    document.getElementById('pointYSlider').max = density;
+    const range = density / 2; // Range is +/- half density
 
-    if (config.cubeX > density) {
-        config.cubeX = density / 2;
-        document.getElementById('pointXSlider').value = config.cubeX;
+    const xSlider = document.getElementById('pointXSlider');
+    const ySlider = document.getElementById('pointYSlider');
+
+    xSlider.min = -range;
+    xSlider.max = range;
+    ySlider.min = -range;
+    ySlider.max = range;
+
+    // Clamp values if out of new range
+    if (Math.abs(config.cubeX) > range) {
+        config.cubeX = Math.sign(config.cubeX) * range;
+        xSlider.value = config.cubeX;
         document.getElementById('pointXValue').textContent = config.cubeX;
     }
-    if (config.cubeY > density) {
-        config.cubeY = density / 2;
-        document.getElementById('pointYSlider').value = config.cubeY;
+    if (Math.abs(config.cubeY) > range) {
+        config.cubeY = Math.sign(config.cubeY) * range;
+        ySlider.value = config.cubeY;
         document.getElementById('pointYValue').textContent = config.cubeY;
     }
 }
