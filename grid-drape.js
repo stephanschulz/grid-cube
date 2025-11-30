@@ -14,8 +14,10 @@ let config = {
     zSeparation: 250,
     cubeSize: 6,
     influenceRadius: 70,
-    gridOpacity: 0.8,
-    shapeOpacity: 0.5, // New opacity for the 3D shape
+    influenceRadius: 70,
+    drapeOpacity: 0.8, // Renamed from gridOpacity
+    shapeOpacity: 0.5,
+    backGridOpacity: 0.3, // New separate opacity for back grid
     lineThickness: 1.5,
     shapeType: 'cube',
     showBackGrid: true,
@@ -538,13 +540,13 @@ function updateVisualization() {
     }
 
     // Render the full drape surface (including flat parts)
-    const frontGrid = createGrid(frontPoints, 0x333333, config.gridOpacity, config.lineThickness, null);
+    const frontGrid = createGrid(frontPoints, 0x333333, config.drapeOpacity, config.lineThickness, null);
     frontGridGroup.add(frontGrid);
 
     // Render back grid (flat floor grid)
     if (config.showBackGrid) {
         // Darker color and higher opacity for better visibility
-        const backGrid = createGrid(backPoints, 0x888888, 0.5, config.lineThickness * 0.5, null);
+        const backGrid = createGrid(backPoints, 0x888888, config.backGridOpacity, config.lineThickness * 0.5, null);
         backGridGroup.add(backGrid);
     }
 
@@ -561,186 +563,83 @@ function resetCamera() {
     controls.update();
 }
 
-// UI initialization
+// UI initialization using dat.GUI
 function initializeUI() {
-    // Set initial values
-    document.getElementById('densitySlider').value = config.gridDensity;
-    document.getElementById('densityValue').textContent = config.gridDensity;
+    const gui = new dat.GUI({ width: 300 });
 
-    document.getElementById('pointXSlider').value = config.cubeX;
-    document.getElementById('pointXValue').textContent = config.cubeX;
-
-    document.getElementById('pointYSlider').value = config.cubeY;
-    document.getElementById('pointYValue').textContent = config.cubeY;
-
-    document.getElementById('zSeparationSlider').value = config.zSeparation;
-    document.getElementById('zSeparationValue').textContent = config.zSeparation;
-
-    document.getElementById('cubeSizeSlider').value = config.cubeSize;
-    document.getElementById('cubeSizeValue').textContent = config.cubeSize;
-
-    document.getElementById('influenceRadiusSlider').value = config.influenceRadius;
-    document.getElementById('influenceRadiusValue').textContent = config.influenceRadius + '%';
-
-    document.getElementById('gridOpacitySlider').value = config.gridOpacity;
-    document.getElementById('gridOpacityValue').textContent = config.gridOpacity.toFixed(1);
-
-    document.getElementById('shapeOpacitySlider').value = config.shapeOpacity;
-    document.getElementById('shapeOpacityValue').textContent = config.shapeOpacity.toFixed(1);
-
-    document.getElementById('lineThicknessSlider').value = config.lineThickness;
-    document.getElementById('lineThicknessValue').textContent = config.lineThickness.toFixed(1);
-
-    document.getElementById('rotationXSlider').value = config.rotationX;
-    document.getElementById('rotationXValue').textContent = config.rotationX + '°';
-
-    document.getElementById('rotationYSlider').value = config.rotationY;
-    document.getElementById('rotationYValue').textContent = config.rotationY + '°';
-
-    document.getElementById('rotationZSlider').value = config.rotationZ;
-    document.getElementById('rotationZValue').textContent = config.rotationZ + '°';
-
-    // Event listeners
-    document.getElementById('densitySlider').addEventListener('input', (e) => {
-        config.gridDensity = parseInt(e.target.value);
-        document.getElementById('densityValue').textContent = config.gridDensity;
-        updatePointSliderMax();
+    // Position folder
+    const positionFolder = gui.addFolder('Position');
+    positionFolder.add(config, 'gridDensity', 15, 40, 5).name('Grid Density').onChange(() => {
+        updatePointSliderRanges();
         updateVisualization();
     });
+    positionFolder.add(config, 'cubeX', -17.5, 17.5, 0.5).name('Cube Center X').onChange(updateVisualization);
+    positionFolder.add(config, 'cubeY', -17.5, 17.5, 0.5).name('Cube Center Y').onChange(updateVisualization);
+    positionFolder.add(config, 'zSeparation', 100, 400, 10).name('Depth (Z)').onChange(updateVisualization);
+    positionFolder.add(config, 'cubeSize', 3, 12, 1).name('Cube Size').onChange(updateVisualization);
+    positionFolder.open();
 
-    document.getElementById('pointXSlider').addEventListener('input', (e) => {
-        config.cubeX = parseFloat(e.target.value);
-        document.getElementById('pointXValue').textContent = config.cubeX;
-        updateVisualization();
-    });
+    // Appearance folder
+    const appearanceFolder = gui.addFolder('Appearance');
+    appearanceFolder.add(config, 'influenceRadius', 0, 100, 5).name('Drape Influence %').onChange(updateVisualization);
+    appearanceFolder.add(config, 'drapeOpacity', 0, 1, 0.1).name('Drape Opacity').onChange(updateVisualization);
+    appearanceFolder.add(config, 'shapeOpacity', 0, 1, 0.1).name('Shape Opacity').onChange(updateVisualization);
+    appearanceFolder.add(config, 'backGridOpacity', 0, 1, 0.1).name('Back Grid Opacity').onChange(updateVisualization);
+    appearanceFolder.add(config, 'lineThickness', 0.5, 5, 0.5).name('Line Thickness').onChange(updateVisualization);
+    appearanceFolder.open();
 
-    document.getElementById('pointYSlider').addEventListener('input', (e) => {
-        config.cubeY = parseFloat(e.target.value);
-        document.getElementById('pointYValue').textContent = config.cubeY;
-        updateVisualization();
-    });
+    // Rotation folder
+    const rotationFolder = gui.addFolder('Rotation');
+    rotationFolder.add(config, 'rotationX', 0, 360, 5).name('Rotation X (°)').onChange(updateVisualization);
+    rotationFolder.add(config, 'rotationY', 0, 360, 5).name('Rotation Y (°)').onChange(updateVisualization);
+    rotationFolder.add(config, 'rotationZ', 0, 360, 5).name('Rotation Z (°)').onChange(updateVisualization);
+    rotationFolder.open();
 
-    document.getElementById('zSeparationSlider').addEventListener('input', (e) => {
-        config.zSeparation = parseInt(e.target.value);
-        document.getElementById('zSeparationValue').textContent = config.zSeparation;
-        updateVisualization();
-    });
+    // Actions folder
+    const actionsFolder = gui.addFolder('Actions');
+    const actions = {
+        toggleShape: function () {
+            config.shapeType = config.shapeType === 'cube' ? 'sphere' : 'cube';
+            updateVisualization();
+        },
+        toggleBackGrid: function () {
+            config.showBackGrid = !config.showBackGrid;
+            updateVisualization();
+        },
+        resetCamera: function () {
+            resetCamera();
+        }
+    };
+    actionsFolder.add(actions, 'toggleShape').name('Toggle Shape Type');
+    actionsFolder.add(actions, 'toggleBackGrid').name('Toggle Back Grid');
+    actionsFolder.add(actions, 'resetCamera').name('Reset Camera');
+    actionsFolder.open();
 
-    document.getElementById('cubeSizeSlider').addEventListener('input', (e) => {
-        config.cubeSize = parseInt(e.target.value);
-        document.getElementById('cubeSizeValue').textContent = config.cubeSize;
-        updateVisualization();
-    });
-
-    document.getElementById('influenceRadiusSlider').addEventListener('input', (e) => {
-        config.influenceRadius = parseInt(e.target.value);
-        document.getElementById('influenceRadiusValue').textContent = config.influenceRadius + '%';
-        updateVisualization();
-    });
-
-    document.getElementById('gridOpacitySlider').addEventListener('input', (e) => {
-        config.gridOpacity = parseFloat(e.target.value);
-        document.getElementById('gridOpacityValue').textContent = config.gridOpacity.toFixed(1);
-        updateVisualization();
-    });
-
-    document.getElementById('shapeOpacitySlider').addEventListener('input', (e) => {
-        config.shapeOpacity = parseFloat(e.target.value);
-        document.getElementById('shapeOpacityValue').textContent = config.shapeOpacity.toFixed(1);
-        updateVisualization();
-    });
-
-    // Assuming addSlider is a helper function that creates a slider and attaches an event listener
-    // The original instruction snippet was malformed, so I'm interpreting it as adding a new slider
-    // for shapeOpacity and keeping the existing gridOpacity and lineThickness sliders as they are,
-    // as the instruction did not provide a definition for `addSlider` or indicate replacement.
-    // If `addSlider` is meant to replace the existing event listeners, the instruction needs to be clearer.
-    // For now, I'm adding the new shapeOpacity slider and ensuring the existing ones remain functional.
-
-    // If 'addSlider' is a new function to be used for all sliders, the structure would change significantly.
-    // Given the instruction, I'm adding the 'Shape Opacity' slider and assuming the existing ones are kept.
-    // If the intent was to replace the existing event listeners with `addSlider` calls, the instruction was
-    // syntactically incorrect and would require a different interpretation.
-
-    // Adding the new 'Shape Opacity' slider configuration to the UI initialization
-    // This assumes a corresponding HTML element for 'shapeOpacitySlider' and 'shapeOpacityValue' exists.
-    // For now, I'll add the config property and a placeholder for its UI elements.
-    // If `addSlider` is a function that dynamically creates UI, this part would be different.
-
-    // Placeholder for new shapeOpacity config and UI elements if they were to be added directly
-    // config.shapeOpacity = 0.5; // Assuming a default value for shapeOpacity
-    // document.getElementById('shapeOpacitySlider').value = config.shapeOpacity;
-    // document.getElementById('shapeOpacityValue').textContent = config.shapeOpacity.toFixed(1);
-    // document.getElementById('shapeOpacitySlider').addEventListener('input', (e) => {
-    //     config.shapeOpacity = parseFloat(e.target.value);
-    //     document.getElementById('shapeOpacityValue').textContent = config.shapeOpacity.toFixed(1);
-    //     updateVisualization();
-    // });
-
-    document.getElementById('lineThicknessSlider').addEventListener('input', (e) => {
-        config.lineThickness = parseFloat(e.target.value);
-        document.getElementById('lineThicknessValue').textContent = config.lineThickness.toFixed(1);
-        updateVisualization();
-    });
-
-    document.getElementById('rotationXSlider').addEventListener('input', (e) => {
-        config.rotationX = parseInt(e.target.value);
-        document.getElementById('rotationXValue').textContent = config.rotationX + '°';
-        updateVisualization();
-    });
-
-    document.getElementById('rotationYSlider').addEventListener('input', (e) => {
-        config.rotationY = parseInt(e.target.value);
-        document.getElementById('rotationYValue').textContent = config.rotationY + '°';
-        updateVisualization();
-    });
-
-    document.getElementById('rotationZSlider').addEventListener('input', (e) => {
-        config.rotationZ = parseInt(e.target.value);
-        document.getElementById('rotationZValue').textContent = config.rotationZ + '°';
-        updateVisualization();
-    });
-
-    document.getElementById('shapeTypeBtn').addEventListener('click', () => {
-        config.shapeType = config.shapeType === 'cube' ? 'sphere' : 'cube';
-        const btn = document.getElementById('shapeTypeBtn');
-        btn.textContent = config.shapeType === 'cube' ? 'Switch to Sphere' : 'Switch to Cube';
-        updateVisualization();
-    });
-
-    document.getElementById('toggleBackGridBtn').addEventListener('click', () => {
-        config.showBackGrid = !config.showBackGrid;
-        updateVisualization();
-    });
-
-    document.getElementById('resetCameraBtn').addEventListener('click', () => {
-        resetCamera();
-    });
+    // Store GUI reference for potential updates
+    window.gui = gui;
 }
 
-// Update point slider max values when density changes
-function updatePointSliderMax() {
-    const density = config.gridDensity;
-    const range = density / 2; // Range is +/- half density
-
-    const xSlider = document.getElementById('pointXSlider');
-    const ySlider = document.getElementById('pointYSlider');
-
-    xSlider.min = -range;
-    xSlider.max = range;
-    ySlider.min = -range;
-    ySlider.max = range;
+// Update point slider ranges when density changes
+function updatePointSliderRanges() {
+    const range = config.gridDensity / 2;
 
     // Clamp values if out of new range
     if (Math.abs(config.cubeX) > range) {
         config.cubeX = Math.sign(config.cubeX) * range;
-        xSlider.value = config.cubeX;
-        document.getElementById('pointXValue').textContent = config.cubeX;
     }
     if (Math.abs(config.cubeY) > range) {
         config.cubeY = Math.sign(config.cubeY) * range;
-        ySlider.value = config.cubeY;
-        document.getElementById('pointYValue').textContent = config.cubeY;
+    }
+
+    // Update GUI controllers
+    if (window.gui) {
+        window.gui.__folders['Position'].__controllers.forEach(controller => {
+            if (controller.property === 'cubeX' || controller.property === 'cubeY') {
+                controller.min(-range);
+                controller.max(range);
+                controller.updateDisplay();
+            }
+        });
     }
 }
 
