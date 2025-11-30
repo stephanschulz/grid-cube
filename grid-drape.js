@@ -8,7 +8,7 @@ let raycaster;
 
 // Configuration
 let config = {
-    gridDensity: 25,
+    gridDensity: 35,
     cubeX: 12,
     cubeY: 12,
     zSeparation: 250,
@@ -203,7 +203,7 @@ function createGrid(points, color, opacity, lineWidth = 1, cullBelowZ = null) {
 function createShapeWalls(spacing, backZ) {
     const group = new THREE.Group();
     const material = new THREE.LineBasicMaterial({
-        color: 0x333333,
+        color: 0x4477ff,  // Blue color for the shape
         transparent: true,
         opacity: config.gridOpacity,
         linewidth: config.lineThickness
@@ -218,6 +218,18 @@ function createShapeWalls(spacing, backZ) {
     let shapeCenterZ;
 
     if (config.shapeType === 'cube') {
+        shapeCenterZ = backZ + config.zSeparation / 2;
+    } else {
+        shapeCenterZ = backZ + size * 1.2; // For sphere, size * 1.2 is its radius
+    }
+
+    // We generate vertices relative to (0,0,0) so we can rotate around the center
+    // Then we position the whole object at (shapeCenterX, shapeCenterY, shapeCenterZ)
+    const localX = 0;
+    const localY = 0;
+    const localZ = 0;
+
+    if (config.shapeType === 'cube') {
         // Cube dimensions: width = size*2, height = size*2, depth = zSeparation
         const cubeWidth = size * 2;
         const cubeHeight = size * 2;
@@ -226,88 +238,86 @@ function createShapeWalls(spacing, backZ) {
         const halfHeight = cubeHeight / 2;
         const halfDepth = cubeDepth / 2;
 
-        shapeCenterZ = backZ + config.zSeparation / 2;
-
         // Draw grid on each face of the cube
         const gridLines = 10; // Number of grid divisions per face
 
-        // Front face (Z = shapeCenterZ + halfDepth)
-        const frontZ = shapeCenterZ + halfDepth;
+        // Front face (Z = localZ + halfDepth)
+        const frontZ = localZ + halfDepth;
         for (let i = 0; i <= gridLines; i++) {
             const t = i / gridLines;
             // Horizontal lines
-            const y = shapeCenterY - halfHeight + t * cubeHeight;
-            vertices.push(shapeCenterX - halfWidth, y, frontZ);
-            vertices.push(shapeCenterX + halfWidth, y, frontZ);
+            const y = localY - halfHeight + t * cubeHeight;
+            vertices.push(localX - halfWidth, y, frontZ);
+            vertices.push(localX + halfWidth, y, frontZ);
             // Vertical lines
-            const x = shapeCenterX - halfWidth + t * cubeWidth;
-            vertices.push(x, shapeCenterY - halfHeight, frontZ);
-            vertices.push(x, shapeCenterY + halfHeight, frontZ);
+            const x = localX - halfWidth + t * cubeWidth;
+            vertices.push(x, localY - halfHeight, frontZ);
+            vertices.push(x, localY + halfHeight, frontZ);
         }
 
-        // Back face (Z = shapeCenterZ - halfDepth)
-        const backFaceZ = shapeCenterZ - halfDepth;
+        // Back face (Z = localZ - halfDepth)
+        const backFaceZ = localZ - halfDepth;
         for (let i = 0; i <= gridLines; i++) {
             const t = i / gridLines;
-            const y = shapeCenterY - halfHeight + t * cubeHeight;
-            vertices.push(shapeCenterX - halfWidth, y, backFaceZ);
-            vertices.push(shapeCenterX + halfWidth, y, backFaceZ);
-            const x = shapeCenterX - halfWidth + t * cubeWidth;
-            vertices.push(x, shapeCenterY - halfHeight, backFaceZ);
-            vertices.push(x, shapeCenterY + halfHeight, backFaceZ);
+            const y = localY - halfHeight + t * cubeHeight;
+            vertices.push(localX - halfWidth, y, backFaceZ);
+            vertices.push(localX + halfWidth, y, backFaceZ);
+            const x = localX - halfWidth + t * cubeWidth;
+            vertices.push(x, localY - halfHeight, backFaceZ);
+            vertices.push(x, localY + halfHeight, backFaceZ);
         }
 
-        // Left face (X = shapeCenterX - halfWidth)
-        const leftX = shapeCenterX - halfWidth;
+        // Left face (X = localX - halfWidth)
+        const leftX = localX - halfWidth;
         for (let i = 0; i <= gridLines; i++) {
             const t = i / gridLines;
-            const y = shapeCenterY - halfHeight + t * cubeHeight;
-            vertices.push(leftX, y, shapeCenterZ - halfDepth);
-            vertices.push(leftX, y, shapeCenterZ + halfDepth);
-            const z = shapeCenterZ - halfDepth + t * cubeDepth;
-            vertices.push(leftX, shapeCenterY - halfHeight, z);
-            vertices.push(leftX, shapeCenterY + halfHeight, z);
+            const y = localY - halfHeight + t * cubeHeight;
+            vertices.push(leftX, y, localZ - halfDepth);
+            vertices.push(leftX, y, localZ + halfDepth);
+            const z = localZ - halfDepth + t * cubeDepth;
+            vertices.push(leftX, localY - halfHeight, z);
+            vertices.push(leftX, localY + halfHeight, z);
         }
 
-        // Right face (X = shapeCenterX + halfWidth)
-        const rightX = shapeCenterX + halfWidth;
+        // Right face (X = localX + halfWidth)
+        const rightX = localX + halfWidth;
         for (let i = 0; i <= gridLines; i++) {
             const t = i / gridLines;
-            const y = shapeCenterY - halfHeight + t * cubeHeight;
-            vertices.push(rightX, y, shapeCenterZ - halfDepth);
-            vertices.push(rightX, y, shapeCenterZ + halfDepth);
-            const z = shapeCenterZ - halfDepth + t * cubeDepth;
-            vertices.push(rightX, shapeCenterY - halfHeight, z);
-            vertices.push(rightX, shapeCenterY + halfHeight, z);
+            const y = localY - halfHeight + t * cubeHeight;
+            vertices.push(rightX, y, localZ - halfDepth);
+            vertices.push(rightX, y, localZ + halfDepth);
+            const z = localZ - halfDepth + t * cubeDepth;
+            vertices.push(rightX, localY - halfHeight, z);
+            vertices.push(rightX, localY + halfHeight, z);
         }
 
-        // Bottom face (Y = shapeCenterY - halfHeight)
-        const bottomY = shapeCenterY - halfHeight;
+        // Bottom face (Y = localY - halfHeight)
+        const bottomY = localY - halfHeight;
         for (let i = 0; i <= gridLines; i++) {
             const t = i / gridLines;
-            const x = shapeCenterX - halfWidth + t * cubeWidth;
-            vertices.push(x, bottomY, shapeCenterZ - halfDepth);
-            vertices.push(x, bottomY, shapeCenterZ + halfDepth);
-            const z = shapeCenterZ - halfDepth + t * cubeDepth;
-            vertices.push(shapeCenterX - halfWidth, bottomY, z);
-            vertices.push(shapeCenterX + halfWidth, bottomY, z);
+            const x = localX - halfWidth + t * cubeWidth;
+            vertices.push(x, bottomY, localZ - halfDepth);
+            vertices.push(x, bottomY, localZ + halfDepth);
+            const z = localZ - halfDepth + t * cubeDepth;
+            vertices.push(localX - halfWidth, bottomY, z);
+            vertices.push(localX + halfWidth, bottomY, z);
         }
 
-        // Top face (Y = shapeCenterY + halfHeight)
-        const topY = shapeCenterY + halfHeight;
+        // Top face (Y = localY + halfHeight)
+        const topY = localY + halfHeight;
         for (let i = 0; i <= gridLines; i++) {
             const t = i / gridLines;
-            const x = shapeCenterX - halfWidth + t * cubeWidth;
-            vertices.push(x, topY, shapeCenterZ - halfDepth);
-            vertices.push(x, topY, shapeCenterZ + halfDepth);
-            const z = shapeCenterZ - halfDepth + t * cubeDepth;
-            vertices.push(shapeCenterX - halfWidth, topY, z);
-            vertices.push(shapeCenterX + halfWidth, topY, z);
+            const x = localX - halfWidth + t * cubeWidth;
+            vertices.push(x, topY, localZ - halfDepth);
+            vertices.push(x, topY, localZ + halfDepth);
+            const z = localZ - halfDepth + t * cubeDepth;
+            vertices.push(localX - halfWidth, topY, z);
+            vertices.push(localX + halfWidth, topY, z);
         }
     } else {
         // Sphere - draw latitude and longitude lines
         const radius = size * 1.2; // Sphere radius (must match collider)
-        shapeCenterZ = backZ + radius;
+        // Center is already (0,0,0) relative to local space
 
         const latLines = 12;
         const lonLines = 16;
@@ -322,13 +332,13 @@ function createShapeWalls(spacing, backZ) {
                 const phi1 = (lon * 2 * Math.PI) / lonLines;
                 const phi2 = ((lon + 1) * 2 * Math.PI) / lonLines;
 
-                const x1 = shapeCenterX + radius * sinTheta * Math.cos(phi1);
-                const y1 = shapeCenterY + radius * cosTheta;
-                const z1 = shapeCenterZ + radius * sinTheta * Math.sin(phi1);
+                const x1 = localX + radius * sinTheta * Math.cos(phi1);
+                const y1 = localY + radius * cosTheta;
+                const z1 = localZ + radius * sinTheta * Math.sin(phi1);
 
-                const x2 = shapeCenterX + radius * sinTheta * Math.cos(phi2);
-                const y2 = shapeCenterY + radius * cosTheta;
-                const z2 = shapeCenterZ + radius * sinTheta * Math.sin(phi2);
+                const x2 = localX + radius * sinTheta * Math.cos(phi2);
+                const y2 = localY + radius * cosTheta;
+                const z2 = localZ + radius * sinTheta * Math.sin(phi2);
 
                 vertices.push(x1, y1, z1);
                 vertices.push(x2, y2, z2);
@@ -343,13 +353,13 @@ function createShapeWalls(spacing, backZ) {
                 const theta1 = (lat * Math.PI) / latLines;
                 const theta2 = ((lat + 1) * Math.PI) / latLines;
 
-                const x1 = shapeCenterX + radius * Math.sin(theta1) * Math.cos(phi);
-                const y1 = shapeCenterY + radius * Math.cos(theta1);
-                const z1 = shapeCenterZ + radius * Math.sin(theta1) * Math.sin(phi);
+                const x1 = localX + radius * Math.sin(theta1) * Math.cos(phi);
+                const y1 = localY + radius * Math.cos(theta1);
+                const z1 = localZ + radius * Math.sin(theta1) * Math.sin(phi);
 
-                const x2 = shapeCenterX + radius * Math.sin(theta2) * Math.cos(phi);
-                const y2 = shapeCenterY + radius * Math.cos(theta2);
-                const z2 = shapeCenterZ + radius * Math.sin(theta2) * Math.sin(phi);
+                const x2 = localX + radius * Math.sin(theta2) * Math.cos(phi);
+                const y2 = localY + radius * Math.cos(theta2);
+                const z2 = localZ + radius * Math.sin(theta2) * Math.sin(phi);
 
                 vertices.push(x1, y1, z1);
                 vertices.push(x2, y2, z2);
@@ -362,7 +372,10 @@ function createShapeWalls(spacing, backZ) {
         geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
         const lines = new THREE.LineSegments(geometry, material);
 
-        // Apply rotation (convert degrees to radians)
+        // Position the object at the calculated center
+        lines.position.set(shapeCenterX, shapeCenterY, shapeCenterZ);
+
+        // Apply rotation (now rotates around the object's center)
         lines.rotation.x = config.rotationX * Math.PI / 180;
         lines.rotation.y = config.rotationY * Math.PI / 180;
         lines.rotation.z = config.rotationZ * Math.PI / 180;
@@ -398,36 +411,71 @@ function updateVisualization() {
         }
     }
 
-    // Calculate Collision Zs using Raycasting
+    // Calculate Collision Zs using Multi-Ray Raycasting
+    // Use multiple rays per grid point to properly detect tilted surfaces
     const collisionZ = [];
     const rayOrigin = new THREE.Vector3();
     const rayDirection = new THREE.Vector3(0, 0, -1); // Raycast downwards
 
+    // Multi-ray sampling parameters
+    // Increased to 7x7 to catch elevated corners when cube is rotated on X/Y
+    const raysPerPoint = 7; // 7x7 grid of rays per point for maximum coverage
+    // Significantly increased sample radius to ensure corners are caught even between grid points
+    const sampleRadius = spacing * 0.8;
+    // Base safety offset
+    const baseSafetyOffset = spacing * 0.15;
+
     for (let i = 0; i <= config.gridDensity; i++) {
         collisionZ[i] = [];
         for (let j = 0; j <= config.gridDensity; j++) {
-            const x = backPoints[i][j].x;
-            const y = backPoints[i][j].y;
+            const centerX = backPoints[i][j].x;
+            const centerY = backPoints[i][j].y;
 
-            // Start ray from high up
-            rayOrigin.set(x, y, 1000);
-            raycaster.set(rayOrigin, rayDirection);
+            let maxZ = backZ; // Start with floor height
+            let maxSlope = 0; // Track slope to increase offset on steep parts
 
-            const intersects = raycaster.intersectObject(colliderMesh);
+            // Cast multiple rays in a grid pattern around this point
+            for (let rx = 0; rx < raysPerPoint; rx++) {
+                for (let ry = 0; ry < raysPerPoint; ry++) {
+                    // Offset from center
+                    const offsetX = ((rx / (raysPerPoint - 1)) - 0.5) * sampleRadius * 2;
+                    const offsetY = ((ry / (raysPerPoint - 1)) - 0.5) * sampleRadius * 2;
 
-            if (intersects.length > 0) {
-                // We hit the object, store the Z
-                // Ensure we don't go below backZ
-                collisionZ[i][j] = Math.max(intersects[0].point.z, backZ);
-            } else {
-                collisionZ[i][j] = backZ;
+                    const x = centerX + offsetX;
+                    const y = centerY + offsetY;
+
+                    // Start ray from VERY high up to catch any elevated corners
+                    rayOrigin.set(x, y, 2000);
+                    raycaster.set(rayOrigin, rayDirection);
+
+                    const intersects = raycaster.intersectObject(colliderMesh);
+
+                    if (intersects.length > 0) {
+                        const z = intersects[0].point.z;
+                        // Take the maximum Z from all ray samples
+                        maxZ = Math.max(maxZ, z);
+
+                        // Check normal to detect steep slopes
+                        if (intersects[0].face) {
+                            // Normal.z is 1 for flat, 0 for vertical
+                            // We want 1 for vertical, 0 for flat
+                            const slope = 1 - Math.abs(intersects[0].face.normal.z);
+                            maxSlope = Math.max(maxSlope, slope);
+                        }
+                    }
+                }
             }
+
+            // Increase safety offset on steep slopes (corners/edges)
+            const dynamicOffset = baseSafetyOffset + (maxSlope * spacing * 0.2);
+
+            // Store the maximum Z found across all rays, plus dynamic safety offset
+            collisionZ[i][j] = Math.max(maxZ + dynamicOffset, backZ);
         }
     }
 
     // Apply Relaxation / Smoothing to simulate cloth
-    // We start with the collision Zs and then "relax" the non-colliding points
-    // to create a smooth drape.
+    // IMPORTANT: Ensure drape never goes below collision surface
 
     // Initialize current Zs
     let currentZ = [];
@@ -439,8 +487,6 @@ function updateVisualization() {
     }
 
     // Relaxation iterations
-    // The number of iterations determines how "stiff" or "loose" the cloth feels
-    // and how far the influence propagates.
     const iterations = Math.floor(config.influenceRadius / 2) + 1;
 
     for (let iter = 0; iter < iterations; iter++) {
@@ -449,11 +495,6 @@ function updateVisualization() {
         for (let i = 0; i <= config.gridDensity; i++) {
             nextZ[i] = [];
             for (let j = 0; j <= config.gridDensity; j++) {
-
-                // If this point is colliding with the mesh, it's fixed (or pushed up)
-                // We only relax points that are "floating" or can be pulled up by neighbors
-                // But wait, even colliding points could be pulled HIGHER by neighbors?
-                // No, usually the object pushes up.
 
                 // Simple Laplacian smoothing
                 let sum = 0;
@@ -467,13 +508,8 @@ function updateVisualization() {
 
                 let average = count > 0 ? sum / count : currentZ[i][j];
 
-                // The cloth tries to be at the average of its neighbors (tension)
-                // But it cannot go inside the object (collision constraint)
-                // And it cannot go below backZ (floor constraint)
-
-                // Apply a "stiffness" factor? 
-                // Let's just take the average but ensure it's >= collisionZ
-
+                // CRITICAL: The cloth MUST stay at or above the collision surface
+                // Take the maximum of the averaged (relaxed) height and the collision height
                 nextZ[i][j] = Math.max(average, collisionZ[i][j]);
             }
         }
