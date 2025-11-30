@@ -389,70 +389,56 @@ function createCloth() {
     }
     
     /**
-     * Calculate cloth height by finding the highest cube surface point at this XZ position
+     * Calculate cloth height - cloth should be flat like a stretched sheet
+     * extending equally in all 4 directions from the cube
      */
     function calculateYDisplacement(x, z) {
+        // Find the highest cube surface point at this XZ location
+        // This accounts for cube rotation
         let maxHeight = 0;
-        let minDistance = Infinity;
-        const searchRadius = (config.clothExtension + 2) * gridSpacing;
+        let minDistanceToSurface = Infinity;
         
-        // Find the highest surface point near this XZ position
         for (const point of cubeSurfacePoints) {
             const dx = point.x - x;
             const dz = point.z - z;
             const xzDist = Math.sqrt(dx * dx + dz * dz);
             
-            if (xzDist > searchRadius) continue;
-            
-            const height = point.y - floorY;
-            
-            // Track closest distance
-            if (xzDist < minDistance) {
-                minDistance = xzDist;
+            // Track the closest surface point
+            if (xzDist < minDistanceToSurface) {
+                minDistanceToSurface = xzDist;
+                maxHeight = Math.max(maxHeight, point.y - floorY);
             }
             
-            // If very close in XZ, use this height
-            if (xzDist < gridSpacing * 0.5) {
-                maxHeight = Math.max(maxHeight, height);
+            // If very close in XZ, definitely use this height
+            if (xzDist < gridSpacing * 0.3) {
+                maxHeight = Math.max(maxHeight, point.y - floorY);
             }
         }
         
-        // If we found a height at this position, use it
-        if (maxHeight > 0) {
+        // Calculate influence distance (how far cloth extends from cube)
+        const influenceDistance = config.clothExtension * gridSpacing;
+        
+        // If cloth extension is 0, only show cloth directly on cube
+        if (influenceDistance === 0) {
+            return minDistanceToSurface < gridSpacing * 0.5 ? maxHeight : 0;
+        }
+        
+        // If we're directly on the cube surface, use full height
+        if (minDistanceToSurface < gridSpacing * 0.5) {
             return maxHeight;
         }
         
-        // Otherwise, find nearest surface point and apply falloff
-        let nearestHeight = 0;
-        minDistance = Infinity;
-        
-        for (const point of cubeSurfacePoints) {
-            const dx = point.x - x;
-            const dz = point.z - z;
-            const xzDist = Math.sqrt(dx * dx + dz * dz);
-            
-            if (xzDist < minDistance) {
-                minDistance = xzDist;
-                nearestHeight = point.y - floorY;
-            }
+        // If beyond influence distance, cloth is flat (height = 0)
+        if (minDistanceToSurface > influenceDistance) {
+            return 0;
         }
         
-        if (nearestHeight > 0) {
-            const influenceDistance = config.clothExtension * gridSpacing;
-            
-            if (influenceDistance === 0 || minDistance > influenceDistance) {
-                return 0;
-            }
-            
-            // Exponential falloff
-            const normalizedDistance = minDistance / influenceDistance;
-            const exponent = 1 + (config.clothStiffness * 4);
-            const falloff = 1 - Math.pow(normalizedDistance, exponent);
-            
-            return Math.max(0, nearestHeight * falloff);
-        }
+        // For points in the extension zone, apply linear falloff for flat sheet effect
+        // Linear falloff creates a flat, stretched sheet appearance (not rounded)
+        const normalizedDistance = (minDistanceToSurface - gridSpacing * 0.5) / influenceDistance;
+        const falloff = Math.max(0, 1 - normalizedDistance); // Linear from 1 to 0
         
-        return 0;
+        return Math.max(0, maxHeight * falloff);
     }
     
     // Create a 2D grid of points with Y displacement (height)
@@ -478,11 +464,12 @@ function createCloth() {
     
     // Apply smoothing through iterative relaxation
     // Stiffness controls how much we smooth vs preserve original heights
-    const smoothingFactor = config.clothStiffness; // 0 = no smoothing, 1 = maximum smoothing
+    // For flat sheet: use minimal smoothing, just remove sharp discontinuities
+    const smoothingFactor = config.clothStiffness * 0.3; // Reduced smoothing to keep sheet flat
     
     // Maximum allowed height difference between adjacent grid points
     // This prevents sharp spikes and ensures smooth cloth appearance
-    const maxHeightDiff = gridSpacing * 1.5; // Allow up to 1.5x grid spacing height difference
+    const maxHeightDiff = gridSpacing * 1.2; // Relaxed constraint for flatter appearance
     
     for (let iter = 0; iter < maxIterations; iter++) {
         const newHeights = heights.map(row => [...row]);
@@ -491,6 +478,12 @@ function createCloth() {
             for (let j = 0; j <= numCellsZ; j++) {
                 const currentHeight = heights[i][j];
                 const idealHeight = idealHeights[i][j];
+                
+                // Only smooth if there's significant height (not on flat floor)
+                if (currentHeight < gridSpacing * 0.1) {
+                    newHeights[i][j] = 0; // Keep floor completely flat
+                    continue;
+                }
                 
                 // Calculate average of neighboring heights (Laplacian smoothing)
                 let neighborSum = 0;
@@ -517,7 +510,7 @@ function createCloth() {
                 const neighborAverage = neighborCount > 0 ? neighborSum / neighborCount : currentHeight;
                 
                 // Blend between current height and neighbor average based on stiffness
-                // Higher stiffness = more smoothing toward neighbor average
+                // Reduced smoothing factor keeps the sheet flatter
                 const smoothedHeight = currentHeight + smoothingFactor * (neighborAverage - currentHeight);
                 
                 // Always respect the ideal height as a minimum (cloth can't go below the cube)

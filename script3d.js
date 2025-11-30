@@ -17,6 +17,7 @@ function loadConfig() {
         clothAlpha: 0.5,
         shapeShellAlpha: 0.8,
         insideShapeAlpha: 0.6,
+        backGridAlpha: 0.3,
         shapeType: 'cube',
         renderMode: 'lines',
         pointSize: 3.0
