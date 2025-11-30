@@ -46,6 +46,7 @@ function init() {
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.localClippingEnabled = true; // Enable local clipping
     container.appendChild(renderer.domElement);
 
     // Controls
@@ -204,11 +205,15 @@ function createGrid(points, color, opacity, lineWidth = 1, cullBelowZ = null) {
 // Draw gridded walls on the 3D shape itself (cube or sphere faces)
 function createShapeWalls(spacing, backZ) {
     const group = new THREE.Group();
+    // Clipping plane to cut off geometry below backZ
+    const clippingPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -backZ);
+
     const material = new THREE.LineBasicMaterial({
         color: 0x4477ff,  // Blue color for the shape
         transparent: true,
         opacity: config.shapeOpacity, // Use specific shape opacity
-        linewidth: config.lineThickness
+        linewidth: config.lineThickness,
+        clippingPlanes: [clippingPlane] // Apply clipping
     });
 
     const vertices = [];
@@ -538,7 +543,8 @@ function updateVisualization() {
 
     // Render back grid (flat floor grid)
     if (config.showBackGrid) {
-        const backGrid = createGrid(backPoints, 0xcccccc, config.gridOpacity * 0.3, config.lineThickness * 0.5, null);
+        // Darker color and higher opacity for better visibility
+        const backGrid = createGrid(backPoints, 0x888888, 0.5, config.lineThickness * 0.5, null);
         backGridGroup.add(backGrid);
     }
 
