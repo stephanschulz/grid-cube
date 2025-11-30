@@ -2,7 +2,7 @@
 // Recreates a cloth-like grid draping over a rotated 3D shape
 
 let scene, camera, renderer, controls;
-let backGridGroup, frontGridGroup, connectionsGroup;
+let backGridGroup, frontGridGroup, connectionsGroup, volumeGroup;
 let colliderMesh; // Invisible mesh for raycasting
 let raycaster;
 
@@ -60,10 +60,12 @@ function init() {
     backGridGroup = new THREE.Group();
     frontGridGroup = new THREE.Group();
     connectionsGroup = new THREE.Group();
+    volumeGroup = new THREE.Group();
 
     scene.add(backGridGroup);
     scene.add(frontGridGroup);
     scene.add(connectionsGroup);
+    scene.add(volumeGroup);
 
     // Raycaster
     raycaster = new THREE.Raycaster();
@@ -143,7 +145,7 @@ function updateColliderMesh(spacing, backZ) {
 }
 
 // Create grid with smooth lines
-function createGrid(points, color, opacity, lineWidth = 1) {
+function createGrid(points, color, opacity, lineWidth = 1, cullBelowZ = null) {
     const group = new THREE.Group();
     const material = new THREE.LineBasicMaterial({
         color: color,
@@ -152,67 +154,220 @@ function createGrid(points, color, opacity, lineWidth = 1) {
         linewidth: lineWidth
     });
 
-    // Horizontal lines
+    const vertices = [];
+
+    // Helper to check if point is significantly elevated
+    const isShapePoint = (p) => {
+        if (cullBelowZ === null) return true;
+        return p.z > cullBelowZ + 5;
+    };
+
+    // Horizontal lines (i-direction)
     for (let j = 0; j <= config.gridDensity; j++) {
-        const geometry = new THREE.BufferGeometry();
-        const vertices = [];
+        for (let i = 0; i < config.gridDensity; i++) {
+            const p1 = points[i][j];
+            const p2 = points[i + 1][j];
 
-        for (let i = 0; i <= config.gridDensity; i++) {
-            const point = points[i][j];
-            vertices.push(point.x, point.y, point.z);
+            // Only draw if BOTH points are part of the elevated shape
+            if (isShapePoint(p1) && isShapePoint(p2)) {
+                vertices.push(p1.x, p1.y, p1.z);
+                vertices.push(p2.x, p2.y, p2.z);
+            }
         }
-
-        geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-        const line = new THREE.Line(geometry, material);
-        group.add(line);
     }
 
-    // Vertical lines
+    // Vertical lines (j-direction)
     for (let i = 0; i <= config.gridDensity; i++) {
-        const geometry = new THREE.BufferGeometry();
-        const vertices = [];
+        for (let j = 0; j < config.gridDensity; j++) {
+            const p1 = points[i][j];
+            const p2 = points[i][j + 1];
 
-        for (let j = 0; j <= config.gridDensity; j++) {
-            const point = points[i][j];
-            vertices.push(point.x, point.y, point.z);
+            if (isShapePoint(p1) && isShapePoint(p2)) {
+                vertices.push(p1.x, p1.y, p1.z);
+                vertices.push(p2.x, p2.y, p2.z);
+            }
         }
+    }
 
+    if (vertices.length > 0) {
+        const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-        const line = new THREE.Line(geometry, material);
-        group.add(line);
+        const lines = new THREE.LineSegments(geometry, material);
+        group.add(lines);
     }
 
     return group;
 }
 
-// Create connection lines between back and front grids
-function createConnections(backPoints, frontPoints) {
+// Draw gridded walls on the 3D shape itself (cube or sphere faces)
+function createShapeWalls(spacing, backZ) {
     const group = new THREE.Group();
     const material = new THREE.LineBasicMaterial({
-        color: 0x667eea,
+        color: 0x333333,
         transparent: true,
-        opacity: config.gridOpacity * 0.3,
-        linewidth: config.lineThickness * 0.5
+        opacity: config.gridOpacity,
+        linewidth: config.lineThickness
     });
 
-    // Only draw connections where there's significant displacement
-    for (let i = 0; i <= config.gridDensity; i++) {
-        for (let j = 0; j <= config.gridDensity; j++) {
-            const back = backPoints[i][j];
-            const front = frontPoints[i][j];
+    const vertices = [];
+    const size = config.cubeSize * spacing;
 
-            // Only show connections with noticeable displacement
-            if (Math.abs(front.z - back.z) > 10) {
-                const geometry = new THREE.BufferGeometry();
-                const vertices = [
-                    back.x, back.y, back.z,
-                    front.x, front.y, front.z
-                ];
-                geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-                const line = new THREE.Line(geometry, material);
-                group.add(line);
+    // Calculate shape center (must match updateColliderMesh)
+    const shapeCenterX = (config.cubeX - config.gridDensity / 2) * spacing;
+    const shapeCenterY = (config.cubeY - config.gridDensity / 2) * spacing;
+    let shapeCenterZ;
+
+    if (config.shapeType === 'cube') {
+        // Cube dimensions: width = size*2, height = size*2, depth = zSeparation
+        const cubeWidth = size * 2;
+        const cubeHeight = size * 2;
+        const cubeDepth = config.zSeparation;
+        const halfWidth = cubeWidth / 2;
+        const halfHeight = cubeHeight / 2;
+        const halfDepth = cubeDepth / 2;
+
+        shapeCenterZ = backZ + config.zSeparation / 2;
+
+        // Draw grid on each face of the cube
+        const gridLines = 10; // Number of grid divisions per face
+
+        // Front face (Z = shapeCenterZ + halfDepth)
+        const frontZ = shapeCenterZ + halfDepth;
+        for (let i = 0; i <= gridLines; i++) {
+            const t = i / gridLines;
+            // Horizontal lines
+            const y = shapeCenterY - halfHeight + t * cubeHeight;
+            vertices.push(shapeCenterX - halfWidth, y, frontZ);
+            vertices.push(shapeCenterX + halfWidth, y, frontZ);
+            // Vertical lines
+            const x = shapeCenterX - halfWidth + t * cubeWidth;
+            vertices.push(x, shapeCenterY - halfHeight, frontZ);
+            vertices.push(x, shapeCenterY + halfHeight, frontZ);
+        }
+
+        // Back face (Z = shapeCenterZ - halfDepth)
+        const backFaceZ = shapeCenterZ - halfDepth;
+        for (let i = 0; i <= gridLines; i++) {
+            const t = i / gridLines;
+            const y = shapeCenterY - halfHeight + t * cubeHeight;
+            vertices.push(shapeCenterX - halfWidth, y, backFaceZ);
+            vertices.push(shapeCenterX + halfWidth, y, backFaceZ);
+            const x = shapeCenterX - halfWidth + t * cubeWidth;
+            vertices.push(x, shapeCenterY - halfHeight, backFaceZ);
+            vertices.push(x, shapeCenterY + halfHeight, backFaceZ);
+        }
+
+        // Left face (X = shapeCenterX - halfWidth)
+        const leftX = shapeCenterX - halfWidth;
+        for (let i = 0; i <= gridLines; i++) {
+            const t = i / gridLines;
+            const y = shapeCenterY - halfHeight + t * cubeHeight;
+            vertices.push(leftX, y, shapeCenterZ - halfDepth);
+            vertices.push(leftX, y, shapeCenterZ + halfDepth);
+            const z = shapeCenterZ - halfDepth + t * cubeDepth;
+            vertices.push(leftX, shapeCenterY - halfHeight, z);
+            vertices.push(leftX, shapeCenterY + halfHeight, z);
+        }
+
+        // Right face (X = shapeCenterX + halfWidth)
+        const rightX = shapeCenterX + halfWidth;
+        for (let i = 0; i <= gridLines; i++) {
+            const t = i / gridLines;
+            const y = shapeCenterY - halfHeight + t * cubeHeight;
+            vertices.push(rightX, y, shapeCenterZ - halfDepth);
+            vertices.push(rightX, y, shapeCenterZ + halfDepth);
+            const z = shapeCenterZ - halfDepth + t * cubeDepth;
+            vertices.push(rightX, shapeCenterY - halfHeight, z);
+            vertices.push(rightX, shapeCenterY + halfHeight, z);
+        }
+
+        // Bottom face (Y = shapeCenterY - halfHeight)
+        const bottomY = shapeCenterY - halfHeight;
+        for (let i = 0; i <= gridLines; i++) {
+            const t = i / gridLines;
+            const x = shapeCenterX - halfWidth + t * cubeWidth;
+            vertices.push(x, bottomY, shapeCenterZ - halfDepth);
+            vertices.push(x, bottomY, shapeCenterZ + halfDepth);
+            const z = shapeCenterZ - halfDepth + t * cubeDepth;
+            vertices.push(shapeCenterX - halfWidth, bottomY, z);
+            vertices.push(shapeCenterX + halfWidth, bottomY, z);
+        }
+
+        // Top face (Y = shapeCenterY + halfHeight)
+        const topY = shapeCenterY + halfHeight;
+        for (let i = 0; i <= gridLines; i++) {
+            const t = i / gridLines;
+            const x = shapeCenterX - halfWidth + t * cubeWidth;
+            vertices.push(x, topY, shapeCenterZ - halfDepth);
+            vertices.push(x, topY, shapeCenterZ + halfDepth);
+            const z = shapeCenterZ - halfDepth + t * cubeDepth;
+            vertices.push(shapeCenterX - halfWidth, topY, z);
+            vertices.push(shapeCenterX + halfWidth, topY, z);
+        }
+    } else {
+        // Sphere - draw latitude and longitude lines
+        const radius = size * 1.2; // Sphere radius (must match collider)
+        shapeCenterZ = backZ + radius;
+
+        const latLines = 12;
+        const lonLines = 16;
+
+        // Latitude lines (horizontal circles)
+        for (let lat = 0; lat <= latLines; lat++) {
+            const theta = (lat * Math.PI) / latLines;
+            const sinTheta = Math.sin(theta);
+            const cosTheta = Math.cos(theta);
+
+            for (let lon = 0; lon < lonLines; lon++) {
+                const phi1 = (lon * 2 * Math.PI) / lonLines;
+                const phi2 = ((lon + 1) * 2 * Math.PI) / lonLines;
+
+                const x1 = shapeCenterX + radius * sinTheta * Math.cos(phi1);
+                const y1 = shapeCenterY + radius * cosTheta;
+                const z1 = shapeCenterZ + radius * sinTheta * Math.sin(phi1);
+
+                const x2 = shapeCenterX + radius * sinTheta * Math.cos(phi2);
+                const y2 = shapeCenterY + radius * cosTheta;
+                const z2 = shapeCenterZ + radius * sinTheta * Math.sin(phi2);
+
+                vertices.push(x1, y1, z1);
+                vertices.push(x2, y2, z2);
             }
         }
+
+        // Longitude lines (vertical circles)
+        for (let lon = 0; lon < lonLines; lon++) {
+            const phi = (lon * 2 * Math.PI) / lonLines;
+
+            for (let lat = 0; lat < latLines; lat++) {
+                const theta1 = (lat * Math.PI) / latLines;
+                const theta2 = ((lat + 1) * Math.PI) / latLines;
+
+                const x1 = shapeCenterX + radius * Math.sin(theta1) * Math.cos(phi);
+                const y1 = shapeCenterY + radius * Math.cos(theta1);
+                const z1 = shapeCenterZ + radius * Math.sin(theta1) * Math.sin(phi);
+
+                const x2 = shapeCenterX + radius * Math.sin(theta2) * Math.cos(phi);
+                const y2 = shapeCenterY + radius * Math.cos(theta2);
+                const z2 = shapeCenterZ + radius * Math.sin(theta2) * Math.sin(phi);
+
+                vertices.push(x1, y1, z1);
+                vertices.push(x2, y2, z2);
+            }
+        }
+    }
+
+    if (vertices.length > 0) {
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        const lines = new THREE.LineSegments(geometry, material);
+
+        // Apply rotation (convert degrees to radians)
+        lines.rotation.x = config.rotationX * Math.PI / 180;
+        lines.rotation.y = config.rotationY * Math.PI / 180;
+        lines.rotation.z = config.rotationZ * Math.PI / 180;
+
+        group.add(lines);
     }
 
     return group;
@@ -224,6 +379,7 @@ function updateVisualization() {
     backGridGroup.clear();
     frontGridGroup.clear();
     connectionsGroup.clear();
+    volumeGroup.clear();
 
     const spacing = 600 / config.gridDensity;
     const backZ = -200;
@@ -337,19 +493,13 @@ function updateVisualization() {
         }
     }
 
-    // Render back grid (subtle, behind)
-    if (config.showBackGrid) {
-        const backGrid = createGrid(backPoints, 0xaaaaaa, config.gridOpacity * 0.25, config.lineThickness * 0.7);
-        backGridGroup.add(backGrid);
-    }
-
-    // Render front grid (main cloth layer)
-    const frontGrid = createGrid(frontPoints, 0x333333, config.gridOpacity, config.lineThickness);
+    // Render ONLY the drape surface (significantly elevated points only)
+    const frontGrid = createGrid(frontPoints, 0x333333, config.gridOpacity, config.lineThickness, backZ);
     frontGridGroup.add(frontGrid);
 
-    // Render connections between layers
-    const connections = createConnections(backPoints, frontPoints);
-    connectionsGroup.add(connections);
+    // Render the 3D shape's walls with grids
+    const shapeWalls = createShapeWalls(spacing, backZ);
+    volumeGroup.add(shapeWalls);
 }
 
 // Reset camera to default view
