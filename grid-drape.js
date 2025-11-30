@@ -12,7 +12,7 @@ let config = {
     cubeX: 0, // Centered at 0
     cubeY: 0, // Centered at 0
     zSeparation: 250,
-    cubeSize: 6,
+    cubeSize: 5, // Must be odd to align with grid
     influenceRadius: 70,
     influenceRadius: 70,
     drapeOpacity: 0.8, // Renamed from gridOpacity
@@ -113,13 +113,17 @@ function updateColliderMesh(spacing, backZ) {
         colliderMesh.material.dispose();
     }
 
-    const size = config.cubeSize * spacing; // Scale size by grid spacing
-
+    // Size
     let geometry;
     if (config.shapeType === 'cube') {
-        geometry = new THREE.BoxGeometry(size * 2, size * 2, config.zSeparation);
+        // Cube size is now based on gridDivisions * spacing
+        const cubeWidth = config.cubeSize * spacing;
+        const cubeHeight = config.cubeSize * spacing;
+        const cubeDepth = config.zSeparation;
+        geometry = new THREE.BoxGeometry(cubeWidth, cubeHeight, cubeDepth);
     } else {
-        geometry = new THREE.SphereGeometry(size * 1.2, 32, 32);
+        const radius = config.cubeSize * spacing * 0.6;
+        geometry = new THREE.SphereGeometry(radius, 32, 32);
     }
 
     const material = new THREE.MeshBasicMaterial({ visible: false }); // Invisible
@@ -137,7 +141,9 @@ function updateColliderMesh(spacing, backZ) {
     if (config.shapeType === 'cube') {
         colliderMesh.position.set(x, y, backZ + config.zSeparation / 2);
     } else {
-        colliderMesh.position.set(x, y, backZ + size * 1.2);
+        // For sphere, its center is at backZ + radius
+        const radius = config.cubeSize * spacing * 0.6;
+        colliderMesh.position.set(x, y, backZ + radius);
     }
 
     // Rotation (convert degrees to radians)
@@ -219,7 +225,10 @@ function createShapeWalls(spacing, backZ) {
     });
 
     const vertices = [];
-    const size = config.cubeSize * spacing;
+    // cubeSize now controls the number of grid divisions, not the physical size
+    // Physical size is determined by spacing to match the main grid
+    const gridDivisions = config.cubeSize; // Use cubeSize for grid divisions
+    const size = spacing; // Use the same spacing as the main grid
 
     // Calculate shape center (must match updateColliderMesh)
     // cubeX and cubeY are now relative to center (0,0)
@@ -230,7 +239,7 @@ function createShapeWalls(spacing, backZ) {
     if (config.shapeType === 'cube') {
         shapeCenterZ = backZ + config.zSeparation / 2;
     } else {
-        shapeCenterZ = backZ + size * 1.2; // For sphere, size * 1.2 is its radius
+        shapeCenterZ = backZ + gridDivisions * size * 0.6; // For sphere, size * 1.2 is its radius
     }
 
     // We generate vertices relative to (0,0,0) so we can rotate around the center
@@ -240,16 +249,16 @@ function createShapeWalls(spacing, backZ) {
     const localZ = 0;
 
     if (config.shapeType === 'cube') {
-        // Cube dimensions: width = size*2, height = size*2, depth = zSeparation
-        const cubeWidth = size * 2;
-        const cubeHeight = size * 2;
+        // Cube dimensions: width and height based on gridDivisions, depth = zSeparation
+        const cubeWidth = gridDivisions * size;
+        const cubeHeight = gridDivisions * size;
         const cubeDepth = config.zSeparation;
         const halfWidth = cubeWidth / 2;
         const halfHeight = cubeHeight / 2;
         const halfDepth = cubeDepth / 2;
 
         // Draw grid on each face of the cube
-        const gridLines = 10; // Number of grid divisions per face
+        const gridLines = gridDivisions; // Number of grid divisions per face
 
         // Front face (Z = localZ + halfDepth)
         const frontZ = localZ + halfDepth;
@@ -326,11 +335,11 @@ function createShapeWalls(spacing, backZ) {
         }
     } else {
         // Sphere - draw latitude and longitude lines
-        const radius = size * 1.2; // Sphere radius (must match collider)
-        // Center is already (0,0,0) relative to local space
-
-        const latLines = 12;
-        const lonLines = 16;
+        const radius = gridDivisions * size * 0.6; // Sphere radius based on grid divisions
+        shapeCenterZ = backZ + radius;
+        // Center is already (0,0,0) relative to local        
+        const latLines = gridDivisions;
+        const lonLines = gridDivisions * 1.5;
 
         // Latitude lines (horizontal circles)
         for (let lat = 0; lat <= latLines; lat++) {
@@ -557,7 +566,7 @@ function updateVisualization() {
 
 // Reset camera to bird's eye view
 function resetCamera() {
-    camera.position.set(0, 1200, 0); // Looking down from above
+    camera.position.set(0, 0, 1200); // Looking down the Z axis from above
     camera.lookAt(0, 0, 0);
     controls.target.set(0, 0, 0);
     controls.update();
@@ -573,10 +582,15 @@ function initializeUI() {
         updatePointSliderRanges();
         updateVisualization();
     });
-    positionFolder.add(config, 'cubeX', -17.5, 17.5, 0.5).name('Cube Center X').onChange(updateVisualization);
-    positionFolder.add(config, 'cubeY', -17.5, 17.5, 0.5).name('Cube Center Y').onChange(updateVisualization);
+    positionFolder.add(config, 'cubeX', -17, 17, 1).name('Cube Center X').onChange(updateVisualization);
+    positionFolder.add(config, 'cubeY', -17, 17, 1).name('Cube Center Y').onChange(updateVisualization);
     positionFolder.add(config, 'zSeparation', 100, 400, 10).name('Depth (Z)').onChange(updateVisualization);
-    positionFolder.add(config, 'cubeSize', 3, 12, 1).name('Cube Size').onChange(updateVisualization);
+    positionFolder.add(config, 'cubeSize', 3, 15, 1).name('Cube Size').onChange((value) => {
+        // Force to nearest odd number
+        const rounded = Math.round(value);
+        config.cubeSize = rounded % 2 === 0 ? rounded + 1 : rounded;
+        updateVisualization();
+    });
     positionFolder.open();
 
     // Appearance folder
