@@ -211,7 +211,7 @@ function createShapeWalls(spacing, backZ) {
     const clippingPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -backZ);
 
     const material = new THREE.LineBasicMaterial({
-        color: 0x4477ff,  // Blue color for the shape
+        color: 0x333333,  // Dark grey to match drape grid
         transparent: true,
         opacity: config.shapeOpacity, // Use specific shape opacity
         linewidth: config.lineThickness,
@@ -555,9 +555,9 @@ function updateVisualization() {
     volumeGroup.add(shapeWalls);
 }
 
-// Reset camera to default view
+// Reset camera to bird's eye view
 function resetCamera() {
-    camera.position.set(600, 400, 800);
+    camera.position.set(0, 1200, 0); // Looking down from above
     camera.lookAt(0, 0, 0);
     controls.target.set(0, 0, 0);
     controls.update();
@@ -602,17 +602,12 @@ function initializeUI() {
             config.shapeType = config.shapeType === 'cube' ? 'sphere' : 'cube';
             updateVisualization();
         },
-        toggleBackGrid: function () {
-            config.showBackGrid = !config.showBackGrid;
-            updateVisualization();
-        },
         resetCamera: function () {
             resetCamera();
         }
     };
     actionsFolder.add(actions, 'toggleShape').name('Toggle Shape Type');
-    actionsFolder.add(actions, 'toggleBackGrid').name('Toggle Back Grid');
-    actionsFolder.add(actions, 'resetCamera').name('Reset Camera');
+    actionsFolder.add(actions, 'resetCamera').name('Bird\'s Eye View');
     actionsFolder.open();
 
     // Store GUI reference for potential updates
