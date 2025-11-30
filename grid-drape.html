@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,19 +11,19 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             overflow: hidden;
             color: #fff;
         }
-        
+
         #canvas-container {
             width: 100vw;
             height: 100vh;
         }
-        
+
         .controls {
             position: absolute;
             top: 30px;
@@ -36,7 +37,7 @@
             overflow-y: auto;
             backdrop-filter: blur(10px);
         }
-        
+
         .controls h2 {
             margin: 0 0 20px 0;
             font-size: 20px;
@@ -45,11 +46,11 @@
             border-bottom: 2px solid #667eea;
             padding-bottom: 10px;
         }
-        
+
         .control-group {
             margin-bottom: 20px;
         }
-        
+
         .control-group label {
             display: block;
             margin-bottom: 8px;
@@ -59,7 +60,7 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
-        
+
         .control-group input[type="range"] {
             width: 100%;
             height: 6px;
@@ -68,7 +69,7 @@
             outline: none;
             -webkit-appearance: none;
         }
-        
+
         .control-group input[type="range"]::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
@@ -80,12 +81,12 @@
             box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
             transition: all 0.2s ease;
         }
-        
+
         .control-group input[type="range"]::-webkit-slider-thumb:hover {
             transform: scale(1.2);
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.6);
         }
-        
+
         .control-group button {
             width: 100%;
             padding: 12px;
@@ -101,16 +102,16 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
-        
+
         .control-group button:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
         }
-        
+
         .control-group button:active {
             transform: translateY(0);
         }
-        
+
         .value-display {
             display: inline-block;
             float: right;
@@ -118,7 +119,7 @@
             color: #667eea;
             font-size: 14px;
         }
-        
+
         .info {
             position: absolute;
             bottom: 30px;
@@ -131,7 +132,7 @@
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
             backdrop-filter: blur(10px);
         }
-        
+
         .title {
             position: absolute;
             top: 30px;
@@ -142,31 +143,32 @@
             text-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             letter-spacing: -0.5px;
         }
-        
+
         /* Custom scrollbar */
         .controls::-webkit-scrollbar {
             width: 6px;
         }
-        
+
         .controls::-webkit-scrollbar-track {
             background: rgba(0, 0, 0, 0.05);
             border-radius: 3px;
         }
-        
+
         .controls::-webkit-scrollbar-thumb {
             background: #667eea;
             border-radius: 3px;
         }
     </style>
 </head>
+
 <body>
     <div class="title">Grid Drape</div>
-    
+
     <div id="canvas-container"></div>
-    
+
     <div class="controls">
         <h2>Controls</h2>
-        
+
         <div class="control-group">
             <label>
                 Grid Density
@@ -174,7 +176,7 @@
             </label>
             <input type="range" id="densitySlider" min="15" max="40" step="5" value="25">
         </div>
-        
+
         <div class="control-group">
             <label>
                 Cube Center X
@@ -182,7 +184,7 @@
             </label>
             <input type="range" id="pointXSlider" min="0" max="25" step="1" value="12">
         </div>
-        
+
         <div class="control-group">
             <label>
                 Cube Center Y
@@ -190,7 +192,7 @@
             </label>
             <input type="range" id="pointYSlider" min="0" max="25" step="1" value="12">
         </div>
-        
+
         <div class="control-group">
             <label>
                 Depth (Z Separation)
@@ -198,7 +200,7 @@
             </label>
             <input type="range" id="zSeparationSlider" min="50" max="500" step="10" value="250">
         </div>
-        
+
         <div class="control-group">
             <label>
                 Cube Size
@@ -206,7 +208,31 @@
             </label>
             <input type="range" id="cubeSizeSlider" min="2" max="12" step="1" value="6">
         </div>
-        
+
+        <div class="control-group">
+            <label>
+                Rotation X
+                <span class="value-display" id="rotationXValue">0°</span>
+            </label>
+            <input type="range" id="rotationXSlider" min="0" max="360" step="5" value="0">
+        </div>
+
+        <div class="control-group">
+            <label>
+                Rotation Y
+                <span class="value-display" id="rotationYValue">0°</span>
+            </label>
+            <input type="range" id="rotationYSlider" min="0" max="360" step="5" value="0">
+        </div>
+
+        <div class="control-group">
+            <label>
+                Rotation Z
+                <span class="value-display" id="rotationZValue">0°</span>
+            </label>
+            <input type="range" id="rotationZSlider" min="0" max="360" step="5" value="0">
+        </div>
+
         <div class="control-group">
             <label>
                 Drape Influence
@@ -214,7 +240,7 @@
             </label>
             <input type="range" id="influenceRadiusSlider" min="0" max="100" step="5" value="70">
         </div>
-        
+
         <div class="control-group">
             <label>
                 Grid Opacity
@@ -222,7 +248,7 @@
             </label>
             <input type="range" id="gridOpacitySlider" min="0.1" max="1" step="0.1" value="0.8">
         </div>
-        
+
         <div class="control-group">
             <label>
                 Line Thickness
@@ -230,26 +256,28 @@
             </label>
             <input type="range" id="lineThicknessSlider" min="0.5" max="3" step="0.5" value="1.5">
         </div>
-        
+
         <div class="control-group">
             <button id="shapeTypeBtn">Switch to Sphere</button>
         </div>
-        
+
         <div class="control-group">
             <button id="toggleBackGridBtn">Toggle Back Grid</button>
         </div>
-        
+
         <div class="control-group">
             <button id="resetCameraBtn">Reset View</button>
         </div>
     </div>
-    
+
     <div class="info">
-        🖱️ <strong>Left-click & drag</strong> to rotate | <strong>Right-click & drag</strong> to pan | <strong>Scroll</strong> to zoom
+        🖱️ <strong>Left-click & drag</strong> to rotate | <strong>Right-click & drag</strong> to pan |
+        <strong>Scroll</strong> to zoom
     </div>
-    
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="grid-drape.js"></script>
 </body>
+
 </html>
