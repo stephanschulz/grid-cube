@@ -616,7 +616,7 @@ function updateVisualization() {
     const backZ = -200;
 
     // Viewport coverage configuration
-    const VIEWPORT_SIZE = 5000; // Large enough to cover screen
+    const VIEWPORT_SIZE = 1500; // Grid coverage area
 
     // Calculate grid size (number of cells) to cover the viewport
     // Force it to be ODD to match the shape's alignment (which has odd divisions)
