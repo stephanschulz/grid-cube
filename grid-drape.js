@@ -15,7 +15,7 @@ let config = {
     influenceRadius: 70,
     drapeOpacity: 1.0, // Renamed from gridOpacity
     shapeOpacity: 1.0,
-    backGridOpacity: 1.0, // New separate opacity for back grid
+    backGridOpacity: 0.5, // New separate opacity for back grid
     drapeLineWidth: 1.5,
     shapeLineWidth: 1.5,
     backGridLineWidth: 0.75,
@@ -163,24 +163,30 @@ const SketchMaterial = new THREE.ShaderMaterial({
         attribute float alpha;
         varying vec3 vColor;
         varying float vAlpha;
+        #include <clipping_planes_pars_vertex>
         void main() {
             vColor = color;
             vAlpha = alpha;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            #include <begin_vertex>
+            #include <project_vertex>
+            #include <clipping_planes_vertex>
         }
     `,
     fragmentShader: `
         uniform float opacity;
         varying vec3 vColor;
         varying float vAlpha;
+        #include <clipping_planes_pars_fragment>
         void main() {
+            #include <clipping_planes_fragment>
             gl_FragColor = vec4(vColor, vAlpha * opacity);
         }
     `,
     transparent: true,
     vertexColors: true,
     side: THREE.DoubleSide,
-    depthWrite: false // Fix blending noise
+    depthWrite: false, // Fix blending noise
+    clipping: false // Disable clipping support by default (enable only for shape)
 });
 
 // Helper to generate a sketchy ribbon mesh for a grid
@@ -216,6 +222,8 @@ function createSketchyGridMesh(points, color, opacity, baseWidth, cullBelowZ = n
             const pos1 = new THREE.Vector3().lerpVectors(p1, p2, t1);
             const pos2 = new THREE.Vector3().lerpVectors(p1, p2, t2);
 
+            // Variable thickness and opacity
+            // Use noise-like randomness based on position
             // Variable thickness and opacity
             // Use noise-like randomness based on position
             const noise1 = Math.sin(pos1.x * 0.1) * Math.cos(pos1.y * 0.1) * Math.sin(pos1.z * 0.1);
@@ -358,6 +366,7 @@ function createShapeWalls(spacing, backZ) {
     const material = SketchMaterial.clone();
     material.uniforms.opacity.value = config.shapeOpacity;
     material.clippingPlanes = [clippingPlane];
+    material.clipping = true; // Enable clipping explicitly for shape
 
     const vertices = [];
     const colors = [];
@@ -789,19 +798,23 @@ function updateVisualization() {
     // Render the full drape surface (including flat parts)
     // Pass gridSize instead of config.gridDensity to createGrid if it uses it?
     // createGrid uses config.gridDensity. We need to update createGrid to accept dimensions or infer them.
-    // Let's modify createGrid to infer dimensions from the points array.
+    // Let's modify createGrid    // Render the full drape surface (including flat parts)
+    // Render the full drape surface (including flat parts)
     const frontGrid = createGrid(frontPoints, 0x333333, config.drapeOpacity, config.drapeLineWidth, null);
+    frontGrid.renderOrder = 2; // Draw last (on top)
     frontGridGroup.add(frontGrid);
 
     // Render back grid (flat floor grid)
     if (config.showBackGrid) {
         // Darker color and higher opacity for better visibility
         const backGrid = createGrid(backPoints, 0x888888, config.backGridOpacity, config.backGridLineWidth, null);
+        backGrid.renderOrder = 0; // Draw first (background)
         backGridGroup.add(backGrid);
     }
 
     // Render the 3D shape's walls with grids
     const shapeWalls = createShapeWalls(spacing, backZ);
+    shapeWalls.renderOrder = 1; // Draw middle
     volumeGroup.add(shapeWalls);
 }
 
