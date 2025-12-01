@@ -136,30 +136,60 @@ function calculateGridAlignmentOffset(spacing) {
         'XYZ'
     ));
 
-    // Apply rotation to all corners
-    const rotatedCorners = corners.map(corner => corner.clone().applyMatrix4(rotationMatrix));
-
-    // Find the lowest corner (minimum Z)
-    let lowestCorner = rotatedCorners[0];
-    for (let i = 1; i < rotatedCorners.length; i++) {
-        if (rotatedCorners[i].z < lowestCorner.z) {
-            lowestCorner = rotatedCorners[i];
-        }
+    // Get the 4 corners of the back face (Z = -halfSize in local space)
+    // These are the corners that should align with the grid for 90° drape folds
+    const backFaceCorners = [
+        new THREE.Vector3(-halfSize, -halfSize, -halfSize), // bottom-left
+        new THREE.Vector3(halfSize, -halfSize, -halfSize),   // bottom-right
+        new THREE.Vector3(-halfSize, halfSize, -halfSize),  // top-left
+        new THREE.Vector3(halfSize, halfSize, -halfSize)    // top-right
+    ];
+    
+    // Rotate the back face corners
+    const rotatedBackCorners = backFaceCorners.map(corner => 
+        corner.clone().applyMatrix4(rotationMatrix)
+    );
+    
+    // For alignment, we want the back face corners to align with grid points
+    // When rotation is 0, the corners are at center ± halfSize
+    // Since cubeSize is odd, halfSize = (cubeSize/2) * spacing = (odd/2) * spacing
+    // This means corners are offset by half a grid spacing from the center
+    // To align corners with grid points, we need to offset the center by half spacing
+    // when rotation is 0, or align to nearest grid point when rotated
+    
+    // For alignment, we want the back face corners to align with grid points
+    // When rotation is 0, corners are at center ± halfSize
+    // Since cubeSize is odd, halfSize = (cubeSize/2) * spacing = (odd/2) * spacing
+    // This means corners are offset by half a grid spacing from center
+    // To align: if center is at grid point, corners are at ±0.5*spacing offset
+    // Solution: offset center by 0.5*spacing so corners align with grid
+    
+    // Check if rotation is effectively 0 (all rotations < 0.1 degrees)
+    const isNoRotation = Math.abs(config.rotationX) < 0.1 && 
+                         Math.abs(config.rotationY) < 0.1 && 
+                         Math.abs(config.rotationZ) < 0.1;
+    
+    if (isNoRotation) {
+        // When no rotation: corners are at center ± halfSize
+        // halfSize = (cubeSize * spacing) / 2
+        // For odd cubeSize, halfSize = (odd/2) * spacing = (integer + 0.5) * spacing
+        // Corners at center ± (integer + 0.5) * spacing
+        // To align corners with grid: offset center by 0.5 * spacing
+        // Then corners are at: (center + 0.5*spacing) ± (integer + 0.5)*spacing
+        // = center + 0.5*spacing ± integer*spacing ± 0.5*spacing
+        // = center ± integer*spacing (which are grid points!)
+        const offsetX = spacing / 2;
+        const offsetY = spacing / 2;
+        return { x: offsetX, y: offsetY, z: 0 };
+    } else {
+        // When rotated, align the bottom-left corner to nearest grid point
+        const bottomLeftCorner = rotatedBackCorners[0];
+        const nearestGridX = Math.round(bottomLeftCorner.x / spacing) * spacing;
+        const nearestGridY = Math.round(bottomLeftCorner.y / spacing) * spacing;
+        const offsetX = nearestGridX - bottomLeftCorner.x;
+        const offsetY = nearestGridY - bottomLeftCorner.y;
+        return { x: offsetX, y: offsetY, z: 0 };
     }
-
-    // Calculate offset to snap the lowest corner to the grid
-    // We want the lowest corner's X and Y to align with grid points
-    const offsetX = Math.round(lowestCorner.x / spacing) * spacing - lowestCorner.x;
-    const offsetY = Math.round(lowestCorner.y / spacing) * spacing - lowestCorner.y;
-    // For Z: when rotation is 0, lowest corner is at local z = -cubeDepth/2
-    // We want the lowest corner to be at backZ, so we need to adjust center position
-    // offsetZ represents how much to shift the center so lowest point aligns with backZ
-    // When rotation is 0: lowestCorner.z = -cubeDepth/2, so offsetZ should be 0
-    // (since center at backZ + cubeDepth/2 already puts back face at backZ)
-    // For rotated cubes, we need to compensate for the rotation
-    const offsetZ = -lowestCorner.z - (cubeSize / 2); // Adjust so back face is at backZ when rotation is 0
-
-    return { x: offsetX, y: offsetY, z: offsetZ };
 }
 
 // Update the hidden collider mesh based on config
@@ -200,16 +230,15 @@ function updateColliderMesh(spacing, backZ) {
     colliderMesh.rotation.z = config.rotationZ * Math.PI / 180;
 
     // Position - center of cube with alignment offset
-    // When rotation is 0, back face should be at backZ
+    // Back face always stays at backZ (no Z movement from rotation)
     const cubeDepth = config.cubeSize * spacing;
     if (config.shapeType === 'cube') {
         // For cube: back face is at local Z = -cubeDepth/2
-        // We want back face at world Z = backZ when rotation is 0
+        // We want back face at world Z = backZ always
         // So: center Z + (-cubeDepth/2) = backZ
         // Therefore: center Z = backZ + cubeDepth/2
-        // The alignmentOffset.z adjusts for rotation to keep the lowest point at backZ
-        // When rotation is 0, offsetZ should be 0, so center is at backZ + cubeDepth/2
-        colliderMesh.position.set(x, y, backZ + cubeDepth / 2 + alignmentOffset.z);
+        // offsetZ is always 0 now, so back face stays at backZ regardless of rotation
+        colliderMesh.position.set(x, y, backZ + cubeDepth / 2);
     } else {
         // For sphere, its back (lowest point) should be at backZ
         const radius = config.cubeSize * spacing * 0.6;
@@ -533,7 +562,8 @@ function createShapeWalls(spacing, backZ) {
 
     if (config.shapeType === 'cube') {
         const cubeDepth = gridDivisions * size;
-        shapeCenterZ = backZ + cubeDepth / 2 + alignmentOffset.z;
+        // Back face always stays at backZ (offsetZ is 0)
+        shapeCenterZ = backZ + cubeDepth / 2;
     } else {
         shapeCenterZ = backZ + gridDivisions * size * 0.6;
     }
