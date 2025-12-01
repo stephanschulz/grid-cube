@@ -903,6 +903,16 @@ function initializeUI() {
     actionsFolder.add(actions, 'toggleShape').name('Toggle Shape Type');
     actionsFolder.add(actions, 'resetCamera').name('Bird\'s Eye View');
 
+    // GitHub link outside of folders
+    const githubAction = {
+        viewGitHub: function () {
+            window.open('https://github.com/stephanschulz/grid-cube', '_blank');
+        }
+    };
+    gui.add(githubAction, 'viewGitHub').name('🔗 View on GitHub');
+
+    // Close GUI by default
+    gui.close();
 
     // Store GUI reference for potential updates
     window.gui = gui;
