@@ -11,7 +11,7 @@ let config = {
     gridDensity: 35,
     cubeX: 0, // Centered at 0
     cubeY: 0, // Centered at 0
-    cubeSize: 5, // Must be odd to align with grid
+    cubeSize: 9, // Must be odd to align with grid
     influenceRadius: 70,
     drapeOpacity: 1.0, // Renamed from gridOpacity
     shapeOpacity: 1.0,
@@ -867,7 +867,7 @@ function initializeUI() {
         config.cubeSize = rounded % 2 === 0 ? rounded + 1 : rounded;
         updateVisualization();
     });
-    positionFolder.open();
+
 
     // Appearance folder
     const appearanceFolder = gui.addFolder('Appearance');
@@ -880,14 +880,14 @@ function initializeUI() {
     appearanceFolder.add(config, 'shapeLineWidth', 0.5, 5, 0.1).name('Shape Width').onChange(updateVisualization);
     appearanceFolder.add(config, 'backGridLineWidth', 0.5, 5, 0.1).name('Back Grid Width').onChange(updateVisualization);
 
-    appearanceFolder.open();
+
 
     // Rotation folder
     const rotationFolder = gui.addFolder('Rotation');
     rotationFolder.add(config, 'rotationX', 0, 360, 5).name('Rotation X (°)').onChange(updateVisualization);
     rotationFolder.add(config, 'rotationY', 0, 360, 5).name('Rotation Y (°)').onChange(updateVisualization);
     rotationFolder.add(config, 'rotationZ', 0, 360, 5).name('Rotation Z (°)').onChange(updateVisualization);
-    rotationFolder.open();
+
 
     // Actions folder
     const actionsFolder = gui.addFolder('Actions');
@@ -902,7 +902,7 @@ function initializeUI() {
     };
     actionsFolder.add(actions, 'toggleShape').name('Toggle Shape Type');
     actionsFolder.add(actions, 'resetCamera').name('Bird\'s Eye View');
-    actionsFolder.open();
+
 
     // Store GUI reference for potential updates
     window.gui = gui;

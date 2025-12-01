@@ -1,203 +1,38 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Grid Cube Deformation - 3D</title>
+    <title>Grid Drape Visualization</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
-            font-family: 'Arial', sans-serif;
-            background: #1a1a1a;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             overflow: hidden;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
-        
+
         #canvas-container {
             width: 100vw;
             height: 100vh;
         }
-        
-        .controls {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            background: rgba(255, 255, 255, 0.95);
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-            min-width: 250px;
-            max-height: calc(100vh - 40px);
-            overflow-y: auto;
-        }
-        
-        .controls h2 {
-            margin: 0 0 15px 0;
-            font-size: 18px;
-            color: #333;
-        }
-        
-        .control-group {
-            margin-bottom: 15px;
-        }
-        
-        .control-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-size: 14px;
-            color: #555;
-        }
-        
-        .control-group input[type="range"] {
-            width: 100%;
-        }
-        
-        .control-group button {
-            width: 100%;
-            padding: 10px;
-            background: #333;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background 0.3s;
-            margin-bottom: 5px;
-        }
-        
-        .control-group button:hover {
-            background: #555;
-        }
-        
-        .value-display {
-            display: inline-block;
-            float: right;
-            font-weight: bold;
-            color: #333;
-        }
-        
-        .info {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            background: rgba(255, 255, 255, 0.9);
-            padding: 10px 15px;
-            border-radius: 5px;
-            font-size: 12px;
-            color: #666;
-        }
     </style>
 </head>
+
 <body>
+
     <div id="canvas-container"></div>
-    
-    <div class="controls">
-        <h2>3D Grid Cube Controls</h2>
-        
-        <div class="control-group">
-            <label>
-                Grid Density
-                <span class="value-display" id="densityValue">20</span>
-            </label>
-            <input type="range" id="densitySlider" min="10" max="40" step="5" value="20">
-        </div>
-        
-        <div class="control-group">
-            <label>
-                Grid Point X
-                <span class="value-display" id="pointXValue">10</span>
-            </label>
-            <input type="range" id="pointXSlider" min="0" max="20" step="1" value="10">
-        </div>
-        
-        <div class="control-group">
-            <label>
-                Grid Point Y
-                <span class="value-display" id="pointYValue">10</span>
-            </label>
-            <input type="range" id="pointYSlider" min="0" max="20" step="1" value="10">
-        </div>
-        
-        <div class="control-group">
-            <label>
-                Z Separation
-                <span class="value-display" id="zSeparationValue">200</span>
-            </label>
-            <input type="range" id="zSeparationSlider" min="-500" max="500" step="10" value="200">
-        </div>
-        
-        <div class="control-group">
-            <label>
-                Cube Size
-                <span class="value-display" id="cubeSizeValue">5</span>
-            </label>
-            <input type="range" id="cubeSizeSlider" min="1" max="15" step="1" value="5">
-        </div>
-        
-        <div class="control-group">
-            <label>
-                Influence Distance
-                <span class="value-display" id="influenceRadiusValue">60%</span>
-            </label>
-            <input type="range" id="influenceRadiusSlider" min="0" max="100" step="1" value="60">
-        </div>
-        
-        <div class="control-group">
-            <label>
-                Cloth Alpha
-                <span class="value-display" id="clothAlphaValue">0.5</span>
-            </label>
-            <input type="range" id="clothAlphaSlider" min="0" max="1" step="0.1" value="0.5">
-        </div>
-        
-        <div class="control-group">
-            <label>
-                Shape Shell Alpha
-                <span class="value-display" id="shapeShellAlphaValue">0.8</span>
-            </label>
-            <input type="range" id="shapeShellAlphaSlider" min="0" max="1" step="0.1" value="0.8">
-        </div>
-        
-        <div class="control-group">
-            <label>
-                Inside Shape Alpha
-                <span class="value-display" id="insideShapeAlphaValue">0.6</span>
-            </label>
-            <input type="range" id="insideShapeAlphaSlider" min="0" max="1" step="0.1" value="0.6">
-        </div>
-        
-        <div class="control-group">
-            <label>
-                Point Size
-                <span class="value-display" id="pointSizeValue">3.0</span>
-            </label>
-            <input type="range" id="pointSizeSlider" min="1" max="10" step="0.5" value="3">
-        </div>
-        
-        <div class="control-group">
-            <button id="shapeTypeBtn">Switch to Sphere</button>
-        </div>
-        
-        <div class="control-group">
-            <button id="renderModeBtn">Switch to Points Only</button>
-        </div>
-        
-        <div class="control-group">
-            <button id="resetCameraBtn">Reset Camera to Front View</button>
-        </div>
-    </div>
-    
-    <div class="info">
-        🖱️ Left-click & drag to rotate | Right-click & drag to pan | Scroll to zoom
-    </div>
-    
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="script3d.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.9/dat.gui.min.js"></script>
+    <script src="grid-drape.js"></script>
 </body>
-</html>
 
+</html>
