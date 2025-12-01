@@ -359,7 +359,8 @@ function createGrid(points, color, opacity, lineWidth = 1, cullBelowZ = null) {
 function createShapeWalls(spacing, backZ) {
     const group = new THREE.Group();
     // Clipping plane to cut off geometry below backZ
-    const clippingPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -backZ);
+    // Offset slightly (0.1) to avoid z-fighting with bottom face
+    const clippingPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -backZ + 0.1);
 
     // We use the same SketchMaterial but we need to clone it to apply clipping planes
     // and specific opacity
@@ -506,6 +507,8 @@ function createShapeWalls(spacing, backZ) {
             const z = localZ - halfDepth + t * cubeDepth;
             addRibbon(new THREE.Vector3(localX - halfWidth, bottomY, z), new THREE.Vector3(localX + halfWidth, bottomY, z), bottomNormal);
         }
+
+
 
         // Top face (Y+)
         const topY = localY + halfHeight;
