@@ -6,6 +6,24 @@ After seeing a social media post showcasing Araujo's beautiful hand-drawn geomet
 
 **Note: This project was developed with AI assistance.**
 
+## 🔗 [Live Demo](https://stephanschulz.github.io/grid_cube/)
+
+## Original Inspiration vs. Coded Version
+
+<table>
+<tr>
+<td width="50%">
+<img src="Screenshot-original.jpg" alt="Original artwork by Rafael Araujo" />
+<p align="center"><em>Original artwork by Rafael Araujo</em></p>
+</td>
+<td width="50%">
+<img src="Screenshot-coded.jpg" alt="Coded version" />
+<p align="center"><em>Interactive coded version</em></p>
+</td>
+</tr>
+</table>
+
+
 ## About the Visualization
 
 This project simulates a cloth-like grid draping over a 3D object (cube or sphere). The visualization follows these key principles:
