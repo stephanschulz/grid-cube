@@ -14,9 +14,9 @@ let config = {
     cubeSize: 5, // Must be odd to align with grid
     influenceRadius: 70,
     influenceRadius: 70,
-    drapeOpacity: 0.8, // Renamed from gridOpacity
-    shapeOpacity: 0.5,
-    backGridOpacity: 0.3, // New separate opacity for back grid
+    drapeOpacity: 1.0, // Renamed from gridOpacity
+    shapeOpacity: 1.0,
+    backGridOpacity: 1.0, // New separate opacity for back grid
     lineThickness: 1.5,
     shapeType: 'cube',
     showBackGrid: true,
@@ -40,7 +40,7 @@ function init() {
         1,
         5000
     );
-    camera.position.set(600, 400, 800);
+    camera.position.set(0, 0, 300); // Start at minDistance (300) and bird's eye view
     camera.lookAt(0, 0, 0);
 
     // Renderer
@@ -163,6 +163,8 @@ function createGrid(points, color, opacity, lineWidth = 1, cullBelowZ = null) {
     });
 
     const vertices = [];
+    const width = points.length;
+    const height = points[0].length;
 
     // Helper to check if point is significantly elevated
     const isShapePoint = (p) => {
@@ -171,8 +173,8 @@ function createGrid(points, color, opacity, lineWidth = 1, cullBelowZ = null) {
     };
 
     // Horizontal lines (i-direction)
-    for (let j = 0; j <= config.gridDensity; j++) {
-        for (let i = 0; i < config.gridDensity; i++) {
+    for (let j = 0; j < height; j++) {
+        for (let i = 0; i < width - 1; i++) {
             const p1 = points[i][j];
             const p2 = points[i + 1][j];
 
@@ -185,8 +187,8 @@ function createGrid(points, color, opacity, lineWidth = 1, cullBelowZ = null) {
     }
 
     // Vertical lines (j-direction)
-    for (let i = 0; i <= config.gridDensity; i++) {
-        for (let j = 0; j < config.gridDensity; j++) {
+    for (let i = 0; i < width; i++) {
+        for (let j = 0; j < height - 1; j++) {
             const p1 = points[i][j];
             const p2 = points[i][j + 1];
 
@@ -414,42 +416,78 @@ function updateVisualization() {
     const spacing = 600 / config.gridDensity;
     const backZ = -200;
 
+    // Viewport coverage configuration
+    const VIEWPORT_SIZE = 5000; // Large enough to cover screen
+
+    // Calculate grid size (number of cells) to cover the viewport
+    // Force it to be ODD to match the shape's alignment (which has odd divisions)
+    let gridSize = Math.ceil(VIEWPORT_SIZE / spacing);
+    if (gridSize % 2 === 0) gridSize++;
+
     // Update the invisible collider mesh
     updateColliderMesh(spacing, backZ);
 
-    // Create back grid points (flat, no displacement)
+    // Create back grid points
+    // We map indices [0, gridSize] to world coordinates centered at 0
     const backPoints = [];
-    for (let i = 0; i <= config.gridDensity; i++) {
+    const halfGridSize = gridSize / 2;
+
+    for (let i = 0; i <= gridSize; i++) {
         backPoints[i] = [];
-        for (let j = 0; j <= config.gridDensity; j++) {
-            const x = (i - config.gridDensity / 2) * spacing;
-            const y = (j - config.gridDensity / 2) * spacing;
+        for (let j = 0; j <= gridSize; j++) {
+            // Calculate actual world coordinates
+            // i goes from 0 to gridSize. 
+            // Center (0,0) corresponds to i = halfGridSize
+            const x = (i - halfGridSize) * spacing;
+            const y = (j - halfGridSize) * spacing;
             backPoints[i][j] = { x, y, z: backZ };
         }
     }
 
     // Calculate Collision Zs using Multi-Ray Raycasting
-    // Use multiple rays per grid point to properly detect tilted surfaces
+    // Optimization: Only raycast near the object
     const collisionZ = [];
     const rayOrigin = new THREE.Vector3();
     const rayDirection = new THREE.Vector3(0, 0, -1); // Raycast downwards
 
-    // Multi-ray sampling parameters
-    // Increased to 7x7 to catch elevated corners when cube is rotated on X/Y
-    const raysPerPoint = 7; // 7x7 grid of rays per point for maximum coverage
-    // Significantly increased sample radius to ensure corners are caught even between grid points
+    const raysPerPoint = 7;
     const sampleRadius = spacing * 0.8;
-    // Base safety offset
-    const baseSafetyOffset = spacing * 0.15;
 
-    for (let i = 0; i <= config.gridDensity; i++) {
+    // Calculate object bounds for optimization
+    const objectX = config.cubeX * spacing;
+    const objectY = config.cubeY * spacing;
+    // Calculate max dimension of the object (cube or sphere)
+    let objectRadius;
+    if (config.shapeType === 'cube') {
+        // Diagonal of the cube is the max reach
+        const cubeSize = config.cubeSize * spacing;
+        // A rough bounding sphere radius for the cube
+        objectRadius = Math.sqrt(3 * (cubeSize / 2) ** 2);
+    } else {
+        objectRadius = config.cubeSize * spacing * 0.6;
+    }
+
+    // Add influence radius and a buffer to the bounds
+    const checkRadius = objectRadius + config.influenceRadius + spacing * 2;
+
+    for (let i = 0; i <= gridSize; i++) {
         collisionZ[i] = [];
-        for (let j = 0; j <= config.gridDensity; j++) {
+        for (let j = 0; j <= gridSize; j++) {
             const centerX = backPoints[i][j].x;
             const centerY = backPoints[i][j].y;
 
+            // Optimization: Distance check
+            const dx = centerX - objectX;
+            const dy = centerY - objectY;
+            const distSq = dx * dx + dy * dy;
+
+            if (distSq > checkRadius * checkRadius) {
+                // Too far from object, just use floor height
+                collisionZ[i][j] = backZ;
+                continue;
+            }
+
             let maxZ = backZ; // Start with floor height
-            let maxSlope = 0; // Track slope to increase offset on steep parts
 
             // Cast multiple rays in a grid pattern around this point
             for (let rx = 0; rx < raysPerPoint; rx++) {
@@ -471,23 +509,12 @@ function updateVisualization() {
                         const z = intersects[0].point.z;
                         // Take the maximum Z from all ray samples
                         maxZ = Math.max(maxZ, z);
-
-                        // Check normal to detect steep slopes
-                        if (intersects[0].face) {
-                            // Normal.z is 1 for flat, 0 for vertical
-                            // We want 1 for vertical, 0 for flat
-                            const slope = 1 - Math.abs(intersects[0].face.normal.z);
-                            maxSlope = Math.max(maxSlope, slope);
-                        }
                     }
                 }
             }
 
-            // Increase safety offset on steep slopes (corners/edges)
-            const dynamicOffset = baseSafetyOffset + (maxSlope * spacing * 0.2);
-
-            // Store the maximum Z found across all rays, plus dynamic safety offset
-            collisionZ[i][j] = Math.max(maxZ + dynamicOffset, backZ);
+            // Store the maximum Z found across all rays (no offset)
+            collisionZ[i][j] = maxZ;
         }
     }
 
@@ -496,48 +523,74 @@ function updateVisualization() {
 
     // Initialize current Zs
     let currentZ = [];
-    for (let i = 0; i <= config.gridDensity; i++) {
+    for (let i = 0; i <= gridSize; i++) {
         currentZ[i] = [];
-        for (let j = 0; j <= config.gridDensity; j++) {
+        for (let j = 0; j <= gridSize; j++) {
             currentZ[i][j] = collisionZ[i][j];
         }
     }
 
     // Relaxation iterations
+    // Optimization: Only relax points that might be affected? 
+    // For now, we'll iterate all, but we could optimize this too if needed.
+    // Given the grid size increase, we should probably limit relaxation to the area of interest too.
+
     const iterations = Math.floor(config.influenceRadius / 2) + 1;
+
+    // Calculate bounds indices for relaxation loop to avoid iterating the whole massive grid
+    // We convert world bounds to indices
+    const minIndexX = Math.max(1, Math.floor((objectX - checkRadius) / spacing + halfGridSize));
+    const maxIndexX = Math.min(gridSize - 1, Math.ceil((objectX + checkRadius) / spacing + halfGridSize));
+    const minIndexY = Math.max(1, Math.floor((objectY - checkRadius) / spacing + halfGridSize));
+    const maxIndexY = Math.min(gridSize - 1, Math.ceil((objectY + checkRadius) / spacing + halfGridSize));
 
     for (let iter = 0; iter < iterations; iter++) {
         const nextZ = [];
+        // Initialize nextZ with current values for the whole grid first (or just handle the active region)
+        // To be safe and simple, we can just copy the array structure or use a sparse approach.
+        // But since we need to read neighbors, let's just create the structure.
+        // Actually, we only need to update the active region. The rest stays as collisionZ (which is backZ).
 
-        for (let i = 0; i <= config.gridDensity; i++) {
-            nextZ[i] = [];
-            for (let j = 0; j <= config.gridDensity; j++) {
+        // Let's just iterate the active region.
+        // We need to be careful about the boundary of the active region. 
+        // Points outside the active region are static (backZ).
+
+        for (let i = minIndexX; i <= maxIndexX; i++) {
+            if (!nextZ[i]) nextZ[i] = []; // We might need to initialize rows if we were sparse, but we are dense.
+            for (let j = minIndexY; j <= maxIndexY; j++) {
 
                 // Simple Laplacian smoothing
                 let sum = 0;
                 let count = 0;
 
                 // Neighbors
-                if (i > 0) { sum += currentZ[i - 1][j]; count++; }
-                if (i < config.gridDensity) { sum += currentZ[i + 1][j]; count++; }
-                if (j > 0) { sum += currentZ[i][j - 1]; count++; }
-                if (j < config.gridDensity) { sum += currentZ[i][j + 1]; count++; }
+                sum += currentZ[i - 1][j]; count++;
+                sum += currentZ[i + 1][j]; count++;
+                sum += currentZ[i][j - 1]; count++;
+                sum += currentZ[i][j + 1]; count++;
 
                 let average = count > 0 ? sum / count : currentZ[i][j];
 
                 // CRITICAL: The cloth MUST stay at or above the collision surface
-                // Take the maximum of the averaged (relaxed) height and the collision height
                 nextZ[i][j] = Math.max(average, collisionZ[i][j]);
             }
         }
-        currentZ = nextZ;
+
+        // Update currentZ with nextZ values for the active region
+        for (let i = minIndexX; i <= maxIndexX; i++) {
+            for (let j = minIndexY; j <= maxIndexY; j++) {
+                if (nextZ[i] && nextZ[i][j] !== undefined) {
+                    currentZ[i][j] = nextZ[i][j];
+                }
+            }
+        }
     }
 
     // Create final front points
     const frontPoints = [];
-    for (let i = 0; i <= config.gridDensity; i++) {
+    for (let i = 0; i <= gridSize; i++) {
         frontPoints[i] = [];
-        for (let j = 0; j <= config.gridDensity; j++) {
+        for (let j = 0; j <= gridSize; j++) {
             frontPoints[i][j] = {
                 x: backPoints[i][j].x,
                 y: backPoints[i][j].y,
@@ -547,6 +600,9 @@ function updateVisualization() {
     }
 
     // Render the full drape surface (including flat parts)
+    // Pass gridSize instead of config.gridDensity to createGrid if it uses it?
+    // createGrid uses config.gridDensity. We need to update createGrid to accept dimensions or infer them.
+    // Let's modify createGrid to infer dimensions from the points array.
     const frontGrid = createGrid(frontPoints, 0x333333, config.drapeOpacity, config.lineThickness, null);
     frontGridGroup.add(frontGrid);
 
@@ -564,7 +620,7 @@ function updateVisualization() {
 
 // Reset camera to bird's eye view
 function resetCamera() {
-    camera.position.set(0, 0, 1200); // Looking down the Z axis from above
+    camera.position.set(0, 0, 300); // Looking down the Z axis from above, zoomed in
     camera.lookAt(0, 0, 0);
     controls.target.set(0, 0, 0);
     controls.update();
