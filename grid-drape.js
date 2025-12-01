@@ -151,7 +151,13 @@ function calculateGridAlignmentOffset(spacing) {
     // We want the lowest corner's X and Y to align with grid points
     const offsetX = Math.round(lowestCorner.x / spacing) * spacing - lowestCorner.x;
     const offsetY = Math.round(lowestCorner.y / spacing) * spacing - lowestCorner.y;
-    const offsetZ = -lowestCorner.z; // Move so lowest point is at z=0 relative to cube center
+    // For Z: when rotation is 0, lowest corner is at local z = -cubeDepth/2
+    // We want the lowest corner to be at backZ, so we need to adjust center position
+    // offsetZ represents how much to shift the center so lowest point aligns with backZ
+    // When rotation is 0: lowestCorner.z = -cubeDepth/2, so offsetZ should be 0
+    // (since center at backZ + cubeDepth/2 already puts back face at backZ)
+    // For rotated cubes, we need to compensate for the rotation
+    const offsetZ = -lowestCorner.z - (cubeSize / 2); // Adjust so back face is at backZ when rotation is 0
 
     return { x: offsetX, y: offsetY, z: offsetZ };
 }
@@ -194,11 +200,18 @@ function updateColliderMesh(spacing, backZ) {
     colliderMesh.rotation.z = config.rotationZ * Math.PI / 180;
 
     // Position - center of cube with alignment offset
+    // When rotation is 0, back face should be at backZ
     const cubeDepth = config.cubeSize * spacing;
     if (config.shapeType === 'cube') {
+        // For cube: back face is at local Z = -cubeDepth/2
+        // We want back face at world Z = backZ when rotation is 0
+        // So: center Z + (-cubeDepth/2) = backZ
+        // Therefore: center Z = backZ + cubeDepth/2
+        // The alignmentOffset.z adjusts for rotation to keep the lowest point at backZ
+        // When rotation is 0, offsetZ should be 0, so center is at backZ + cubeDepth/2
         colliderMesh.position.set(x, y, backZ + cubeDepth / 2 + alignmentOffset.z);
     } else {
-        // For sphere, its center is at backZ + radius
+        // For sphere, its back (lowest point) should be at backZ
         const radius = config.cubeSize * spacing * 0.6;
         colliderMesh.position.set(x, y, backZ + radius);
     }
