@@ -6,7 +6,7 @@ After seeing a social media post showcasing Araujo's beautiful hand-drawn geomet
 
 **Note: This project was developed with AI assistance.**
 
-## 🔗 [Live Demo](https://stephanschulz.github.io/grid_cube/)
+## 🔗 [Live Demo](https://stephanschulz.ca/grid-cube/)
 
 ## Original Inspiration vs. Coded Version
 
