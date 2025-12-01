@@ -13,11 +13,12 @@ let config = {
     cubeY: 0, // Centered at 0
     cubeSize: 5, // Must be odd to align with grid
     influenceRadius: 70,
-    influenceRadius: 70,
     drapeOpacity: 1.0, // Renamed from gridOpacity
     shapeOpacity: 1.0,
     backGridOpacity: 1.0, // New separate opacity for back grid
-    lineThickness: 1.5,
+    drapeLineWidth: 1.5,
+    shapeLineWidth: 1.5,
+    backGridLineWidth: 0.75,
     shapeType: 'cube',
     showBackGrid: true,
     rotationX: 0,
@@ -152,62 +153,114 @@ function updateColliderMesh(spacing, backZ) {
     scene.add(colliderMesh);
 }
 
-// Create grid with smooth lines
-function createGrid(points, color, opacity, lineWidth = 1, cullBelowZ = null) {
-    const group = new THREE.Group();
+// Custom ShaderMaterial for Sketchy Lines
+// Supports vertex colors with alpha and varying thickness (via mesh)
+const SketchMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+        opacity: { value: 1.0 }
+    },
+    vertexShader: `
+        attribute float alpha;
+        varying vec3 vColor;
+        varying float vAlpha;
+        void main() {
+            vColor = color;
+            vAlpha = alpha;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform float opacity;
+        varying vec3 vColor;
+        varying float vAlpha;
+        void main() {
+            gl_FragColor = vec4(vColor, vAlpha * opacity);
+        }
+    `,
+    transparent: true,
+    vertexColors: true,
+    side: THREE.DoubleSide,
+    depthWrite: false // Fix blending noise
+});
 
-    // Use vertex colors for the fading/pressure effect
-    const material = new THREE.LineBasicMaterial({
-        vertexColors: true, // Enable vertex colors
-        transparent: true,
-        opacity: opacity,
-        linewidth: lineWidth
-    });
+// Helper to generate a sketchy ribbon mesh for a grid
+function createSketchyGridMesh(points, color, opacity, baseWidth, cullBelowZ = null) {
+    const group = new THREE.Group();
 
     const vertices = [];
     const colors = [];
+    const alphas = [];
+    const indices = [];
+    let vertexIndex = 0;
+
     const width = points.length;
     const height = points[0].length;
-
-    // Pencil effect parameters
-    const JITTER_AMOUNT = 1.5; // Max offset in units
-    const PASSES = 2; // Draw each line twice
     const BASE_COLOR = new THREE.Color(color);
-    const BG_COLOR = new THREE.Color(0xf8f9fa); // Match scene background
 
-    // Helper to add a sketchy line segment
-    const addSketchySegment = (p1, p2) => {
-        for (let k = 0; k < PASSES; k++) {
-            // Randomly skip some segments for "gaps"
-            if (Math.random() > 0.9) continue;
+    // Helper to add a ribbon segment
+    // p1, p2: start and end points
+    // normal: surface normal at this segment (approximate)
+    const addRibbon = (p1, p2, normal) => {
+        // Subdivide segment for variable thickness
+        const dist = new THREE.Vector3(p1.x - p2.x, p1.y - p2.y, p1.z - p2.z).length();
+        const segments = Math.max(2, Math.ceil(dist / 10)); // Segment every ~10 units
 
-            // Calculate pressure (opacity/darkness)
-            const pressure = 0.3 + Math.random() * 0.7;
+        const dir = new THREE.Vector3().subVectors(p2, p1).normalize();
+        // Calculate "side" vector perpendicular to direction and normal
+        const side = new THREE.Vector3().crossVectors(dir, normal).normalize();
 
-            // Mix color based on pressure
-            const segmentColor = BASE_COLOR.clone().lerp(BG_COLOR, 1 - pressure);
+        for (let k = 0; k < segments; k++) {
+            const t1 = k / segments;
+            const t2 = (k + 1) / segments;
 
-            // Add jitter to start and end points
-            const j1 = {
-                x: p1.x + (Math.random() - 0.5) * JITTER_AMOUNT,
-                y: p1.y + (Math.random() - 0.5) * JITTER_AMOUNT,
-                z: p1.z + (Math.random() - 0.5) * JITTER_AMOUNT * 0.2 // Less Z jitter
-            };
-            const j2 = {
-                x: p2.x + (Math.random() - 0.5) * JITTER_AMOUNT,
-                y: p2.y + (Math.random() - 0.5) * JITTER_AMOUNT,
-                z: p2.z + (Math.random() - 0.5) * JITTER_AMOUNT * 0.2
-            };
+            const pos1 = new THREE.Vector3().lerpVectors(p1, p2, t1);
+            const pos2 = new THREE.Vector3().lerpVectors(p1, p2, t2);
 
-            vertices.push(j1.x, j1.y, j1.z);
-            vertices.push(j2.x, j2.y, j2.z);
+            // Variable thickness and opacity
+            // Use noise-like randomness based on position
+            const noise1 = Math.sin(pos1.x * 0.1) * Math.cos(pos1.y * 0.1) * Math.sin(pos1.z * 0.1);
+            const noise2 = Math.sin(pos2.x * 0.1) * Math.cos(pos2.y * 0.1) * Math.sin(pos2.z * 0.1);
 
-            colors.push(segmentColor.r, segmentColor.g, segmentColor.b);
-            colors.push(segmentColor.r, segmentColor.g, segmentColor.b);
+            const w1 = baseWidth * (0.5 + 0.5 * Math.abs(noise1) + 0.5 * Math.random());
+            const w2 = baseWidth * (0.5 + 0.5 * Math.abs(noise2) + 0.5 * Math.random());
+
+            const a1 = 0.4 + 0.6 * Math.abs(noise1); // Opacity 0.4 - 1.0
+            const a2 = 0.4 + 0.6 * Math.abs(noise2);
+
+            // Vertices for the quad (strip)
+            // v1 --- v2
+            // |      |
+            // v3 --- v4
+
+            const v1 = pos1.clone().addScaledVector(side, w1 / 2);
+            const v3 = pos1.clone().addScaledVector(side, -w1 / 2);
+            const v2 = pos2.clone().addScaledVector(side, w2 / 2);
+            const v4 = pos2.clone().addScaledVector(side, -w2 / 2);
+
+            vertices.push(v1.x, v1.y, v1.z);
+            vertices.push(v2.x, v2.y, v2.z);
+            vertices.push(v3.x, v3.y, v3.z);
+            vertices.push(v4.x, v4.y, v4.z);
+
+            // Colors (constant for now)
+            colors.push(BASE_COLOR.r, BASE_COLOR.g, BASE_COLOR.b);
+            colors.push(BASE_COLOR.r, BASE_COLOR.g, BASE_COLOR.b);
+            colors.push(BASE_COLOR.r, BASE_COLOR.g, BASE_COLOR.b);
+            colors.push(BASE_COLOR.r, BASE_COLOR.g, BASE_COLOR.b);
+
+            // Alphas
+            alphas.push(a1, a2, a1, a2);
+
+            // Indices (Two triangles)
+            // 0, 2, 1
+            // 1, 2, 3
+            indices.push(vertexIndex, vertexIndex + 2, vertexIndex + 1);
+            indices.push(vertexIndex + 1, vertexIndex + 2, vertexIndex + 3);
+
+            vertexIndex += 4;
         }
     };
 
-    // Helper to check if point is significantly elevated
     const isShapePoint = (p) => {
         if (cullBelowZ === null) return true;
         return p.z > cullBelowZ + 5;
@@ -219,9 +272,27 @@ function createGrid(points, color, opacity, lineWidth = 1, cullBelowZ = null) {
             const p1 = points[i][j];
             const p2 = points[i + 1][j];
 
-            // Only draw if BOTH points are part of the elevated shape
             if (isShapePoint(p1) && isShapePoint(p2)) {
-                addSketchySegment(p1, p2);
+                // Calculate approximate normal
+                // For horizontal line, look at vertical neighbors to get slope
+                // Or just use Up vector (0,0,1) for simplicity if slope is small
+                // Better: use cross product of (p2-p1) and (p_up - p_down)
+
+                let v_up, v_down;
+                if (j < height - 1) v_up = points[i][j + 1];
+                else v_up = points[i][j]; // Boundary
+
+                if (j > 0) v_down = points[i][j - 1];
+                else v_down = points[i][j]; // Boundary
+
+                const vecH = new THREE.Vector3(p2.x - p1.x, p2.y - p1.y, p2.z - p1.z);
+                const vecV = new THREE.Vector3(v_up.x - v_down.x, v_up.y - v_down.y, v_up.z - v_down.z);
+
+                // Normal is cross product
+                const normal = new THREE.Vector3().crossVectors(vecH, vecV).normalize();
+                if (normal.lengthSq() < 0.1) normal.set(0, 0, 1); // Fallback
+
+                addRibbon(p1, p2, normal);
             }
         }
     }
@@ -233,7 +304,22 @@ function createGrid(points, color, opacity, lineWidth = 1, cullBelowZ = null) {
             const p2 = points[i][j + 1];
 
             if (isShapePoint(p1) && isShapePoint(p2)) {
-                addSketchySegment(p1, p2);
+                // Calculate approximate normal
+                let v_right, v_left;
+                if (i < width - 1) v_right = points[i + 1][j];
+                else v_right = points[i][j];
+
+                if (i > 0) v_left = points[i - 1][j];
+                else v_left = points[i][j];
+
+                const vecV = new THREE.Vector3(p2.x - p1.x, p2.y - p1.y, p2.z - p1.z);
+                const vecH = new THREE.Vector3(v_right.x - v_left.x, v_right.y - v_left.y, v_right.z - v_left.z);
+
+                // Normal is cross product (vecH x vecV)
+                const normal = new THREE.Vector3().crossVectors(vecH, vecV).normalize();
+                if (normal.lengthSq() < 0.1) normal.set(0, 0, 1);
+
+                addRibbon(p1, p2, normal);
             }
         }
     }
@@ -242,11 +328,23 @@ function createGrid(points, color, opacity, lineWidth = 1, cullBelowZ = null) {
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
         geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-        const lines = new THREE.LineSegments(geometry, material);
-        group.add(lines);
+        geometry.setAttribute('alpha', new THREE.Float32BufferAttribute(alphas, 1));
+        geometry.setIndex(indices);
+
+        // Clone material to allow independent opacity control
+        const mat = SketchMaterial.clone();
+        mat.uniforms.opacity.value = opacity;
+
+        const mesh = new THREE.Mesh(geometry, mat);
+        group.add(mesh);
     }
 
     return group;
+}
+
+// Wrapper to replace createGrid
+function createGrid(points, color, opacity, lineWidth = 1, cullBelowZ = null) {
+    return createSketchyGridMesh(points, color, opacity, lineWidth, cullBelowZ);
 }
 
 // Draw gridded walls on the 3D shape itself (cube or sphere faces)
@@ -255,57 +353,72 @@ function createShapeWalls(spacing, backZ) {
     // Clipping plane to cut off geometry below backZ
     const clippingPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -backZ);
 
-    const material = new THREE.LineBasicMaterial({
-        vertexColors: true, // Enable vertex colors
-        transparent: true,
-        opacity: config.shapeOpacity, // Use specific shape opacity
-        linewidth: config.lineThickness,
-        clippingPlanes: [clippingPlane] // Apply clipping
-    });
+    // We use the same SketchMaterial but we need to clone it to apply clipping planes
+    // and specific opacity
+    const material = SketchMaterial.clone();
+    material.uniforms.opacity.value = config.shapeOpacity;
+    material.clippingPlanes = [clippingPlane];
 
     const vertices = [];
     const colors = [];
+    const alphas = [];
+    const indices = [];
+    let vertexIndex = 0;
 
-    // Pencil effect parameters
-    const JITTER_AMOUNT = 1.5;
-    const PASSES = 2;
     const BASE_COLOR = new THREE.Color(0x333333);
-    const BG_COLOR = new THREE.Color(0xf8f9fa);
+    const baseWidth = config.shapeLineWidth; // Use specific shape line width
 
-    // Helper to add a sketchy line segment
-    const addSketchySegment = (p1, p2) => {
-        for (let k = 0; k < PASSES; k++) {
-            if (Math.random() > 0.9) continue;
+    // Helper to add a ribbon segment
+    const addRibbon = (p1, p2, normal) => {
+        const dist = new THREE.Vector3(p1.x - p2.x, p1.y - p2.y, p1.z - p2.z).length();
+        const segments = Math.max(2, Math.ceil(dist / 10));
 
-            const pressure = 0.3 + Math.random() * 0.7;
-            const segmentColor = BASE_COLOR.clone().lerp(BG_COLOR, 1 - pressure);
+        const dir = new THREE.Vector3().subVectors(p2, p1).normalize();
+        const side = new THREE.Vector3().crossVectors(dir, normal).normalize();
 
-            const j1 = {
-                x: p1.x + (Math.random() - 0.5) * JITTER_AMOUNT,
-                y: p1.y + (Math.random() - 0.5) * JITTER_AMOUNT,
-                z: p1.z + (Math.random() - 0.5) * JITTER_AMOUNT * 0.2
-            };
-            const j2 = {
-                x: p2.x + (Math.random() - 0.5) * JITTER_AMOUNT,
-                y: p2.y + (Math.random() - 0.5) * JITTER_AMOUNT,
-                z: p2.z + (Math.random() - 0.5) * JITTER_AMOUNT * 0.2
-            };
+        for (let k = 0; k < segments; k++) {
+            const t1 = k / segments;
+            const t2 = (k + 1) / segments;
 
-            vertices.push(j1.x, j1.y, j1.z);
-            vertices.push(j2.x, j2.y, j2.z);
+            const pos1 = new THREE.Vector3().lerpVectors(p1, p2, t1);
+            const pos2 = new THREE.Vector3().lerpVectors(p1, p2, t2);
 
-            colors.push(segmentColor.r, segmentColor.g, segmentColor.b);
-            colors.push(segmentColor.r, segmentColor.g, segmentColor.b);
+            const noise1 = Math.sin(pos1.x * 0.1) * Math.cos(pos1.y * 0.1) * Math.sin(pos1.z * 0.1);
+            const noise2 = Math.sin(pos2.x * 0.1) * Math.cos(pos2.y * 0.1) * Math.sin(pos2.z * 0.1);
+
+            const w1 = baseWidth * (0.5 + 0.5 * Math.abs(noise1) + 0.5 * Math.random());
+            const w2 = baseWidth * (0.5 + 0.5 * Math.abs(noise2) + 0.5 * Math.random());
+
+            const a1 = 0.4 + 0.6 * Math.abs(noise1);
+            const a2 = 0.4 + 0.6 * Math.abs(noise2);
+
+            const v1 = pos1.clone().addScaledVector(side, w1 / 2);
+            const v3 = pos1.clone().addScaledVector(side, -w1 / 2);
+            const v2 = pos2.clone().addScaledVector(side, w2 / 2);
+            const v4 = pos2.clone().addScaledVector(side, -w2 / 2);
+
+            vertices.push(v1.x, v1.y, v1.z);
+            vertices.push(v2.x, v2.y, v2.z);
+            vertices.push(v3.x, v3.y, v3.z);
+            vertices.push(v4.x, v4.y, v4.z);
+
+            colors.push(BASE_COLOR.r, BASE_COLOR.g, BASE_COLOR.b);
+            colors.push(BASE_COLOR.r, BASE_COLOR.g, BASE_COLOR.b);
+            colors.push(BASE_COLOR.r, BASE_COLOR.g, BASE_COLOR.b);
+            colors.push(BASE_COLOR.r, BASE_COLOR.g, BASE_COLOR.b);
+
+            alphas.push(a1, a2, a1, a2);
+
+            indices.push(vertexIndex, vertexIndex + 2, vertexIndex + 1);
+            indices.push(vertexIndex + 1, vertexIndex + 2, vertexIndex + 3);
+
+            vertexIndex += 4;
         }
     };
 
-    // cubeSize now controls the number of grid divisions, not the physical size
-    // Physical size is determined by spacing to match the main grid
-    const gridDivisions = config.cubeSize; // Use cubeSize for grid divisions
-    const size = spacing; // Use the same spacing as the main grid
+    const gridDivisions = config.cubeSize;
+    const size = spacing;
 
-    // Calculate shape center (must match updateColliderMesh)
-    // cubeX and cubeY are now relative to center (0,0)
     const shapeCenterX = config.cubeX * spacing;
     const shapeCenterY = config.cubeY * spacing;
     let shapeCenterZ;
@@ -317,103 +430,97 @@ function createShapeWalls(spacing, backZ) {
         shapeCenterZ = backZ + gridDivisions * size * 0.6;
     }
 
-    // We generate vertices relative to (0,0,0) so we can rotate around the center
-    // Then we position the whole object at (shapeCenterX, shapeCenterY, shapeCenterZ)
     const localX = 0;
     const localY = 0;
     const localZ = 0;
 
     if (config.shapeType === 'cube') {
-        // Cube dimensions: all based on gridDivisions for a true cube
         const cubeWidth = gridDivisions * size;
         const cubeHeight = gridDivisions * size;
-        const cubeDepth = gridDivisions * size; // Same as width and height
+        const cubeDepth = gridDivisions * size;
         const halfWidth = cubeWidth / 2;
         const halfHeight = cubeHeight / 2;
         const halfDepth = cubeDepth / 2;
+        const gridLines = gridDivisions;
 
-        // Draw grid on each face of the cube
-        const gridLines = gridDivisions; // Number of grid divisions per face
-
-        // Helper to add segment from coords
-        const addSeg = (x1, y1, z1, x2, y2, z2) => {
-            addSketchySegment({ x: x1, y: y1, z: z1 }, { x: x2, y: y2, z: z2 });
-        };
-
-        // Front face (Z = localZ + halfDepth)
+        // Front face (Z+)
         const frontZ = localZ + halfDepth;
+        const frontNormal = new THREE.Vector3(0, 0, 1);
         for (let i = 0; i <= gridLines; i++) {
             const t = i / gridLines;
-            // Horizontal lines
             const y = localY - halfHeight + t * cubeHeight;
-            addSeg(localX - halfWidth, y, frontZ, localX + halfWidth, y, frontZ);
-            // Vertical lines
+            addRibbon(new THREE.Vector3(localX - halfWidth, y, frontZ), new THREE.Vector3(localX + halfWidth, y, frontZ), frontNormal);
             const x = localX - halfWidth + t * cubeWidth;
-            addSeg(x, localY - halfHeight, frontZ, x, localY + halfHeight, frontZ);
+            addRibbon(new THREE.Vector3(x, localY - halfHeight, frontZ), new THREE.Vector3(x, localY + halfHeight, frontZ), frontNormal);
         }
 
-        // Back face (Z = localZ - halfDepth)
+        // Back face (Z-)
         const backFaceZ = localZ - halfDepth;
+        const backNormal = new THREE.Vector3(0, 0, -1);
         for (let i = 0; i <= gridLines; i++) {
             const t = i / gridLines;
             const y = localY - halfHeight + t * cubeHeight;
-            addSeg(localX - halfWidth, y, backFaceZ, localX + halfWidth, y, backFaceZ);
+            addRibbon(new THREE.Vector3(localX - halfWidth, y, backFaceZ), new THREE.Vector3(localX + halfWidth, y, backFaceZ), backNormal);
             const x = localX - halfWidth + t * cubeWidth;
-            addSeg(x, localY - halfHeight, backFaceZ, x, localY + halfHeight, backFaceZ);
+            addRibbon(new THREE.Vector3(x, localY - halfHeight, backFaceZ), new THREE.Vector3(x, localY + halfHeight, backFaceZ), backNormal);
         }
 
-        // Left face (X = localX - halfWidth)
+        // Left face (X-)
         const leftX = localX - halfWidth;
+        const leftNormal = new THREE.Vector3(-1, 0, 0);
         for (let i = 0; i <= gridLines; i++) {
             const t = i / gridLines;
             const y = localY - halfHeight + t * cubeHeight;
-            addSeg(leftX, y, localZ - halfDepth, leftX, y, localZ + halfDepth);
+            addRibbon(new THREE.Vector3(leftX, y, localZ - halfDepth), new THREE.Vector3(leftX, y, localZ + halfDepth), leftNormal);
             const z = localZ - halfDepth + t * cubeDepth;
-            addSeg(leftX, localY - halfHeight, z, leftX, localY + halfHeight, z);
+            addRibbon(new THREE.Vector3(leftX, localY - halfHeight, z), new THREE.Vector3(leftX, localY + halfHeight, z), leftNormal);
         }
 
-        // Right face (X = localX + halfWidth)
+        // Right face (X+)
         const rightX = localX + halfWidth;
+        const rightNormal = new THREE.Vector3(1, 0, 0);
         for (let i = 0; i <= gridLines; i++) {
             const t = i / gridLines;
             const y = localY - halfHeight + t * cubeHeight;
-            addSeg(rightX, y, localZ - halfDepth, rightX, y, localZ + halfDepth);
+            addRibbon(new THREE.Vector3(rightX, y, localZ - halfDepth), new THREE.Vector3(rightX, y, localZ + halfDepth), rightNormal);
             const z = localZ - halfDepth + t * cubeDepth;
-            addSeg(rightX, localY - halfHeight, z, rightX, localY + halfHeight, z);
+            addRibbon(new THREE.Vector3(rightX, localY - halfHeight, z), new THREE.Vector3(rightX, localY + halfHeight, z), rightNormal);
         }
 
-        // Bottom face (Y = localY - halfHeight)
+        // Bottom face (Y-)
         const bottomY = localY - halfHeight;
+        const bottomNormal = new THREE.Vector3(0, -1, 0);
         for (let i = 0; i <= gridLines; i++) {
             const t = i / gridLines;
             const x = localX - halfWidth + t * cubeWidth;
-            addSeg(x, bottomY, localZ - halfDepth, x, bottomY, localZ + halfDepth);
+            addRibbon(new THREE.Vector3(x, bottomY, localZ - halfDepth), new THREE.Vector3(x, bottomY, localZ + halfDepth), bottomNormal);
             const z = localZ - halfDepth + t * cubeDepth;
-            addSeg(localX - halfWidth, bottomY, z, localX + halfWidth, bottomY, z);
+            addRibbon(new THREE.Vector3(localX - halfWidth, bottomY, z), new THREE.Vector3(localX + halfWidth, bottomY, z), bottomNormal);
         }
 
-        // Top face (Y = localY + halfHeight)
+        // Top face (Y+)
         const topY = localY + halfHeight;
+        const topNormal = new THREE.Vector3(0, 1, 0);
         for (let i = 0; i <= gridLines; i++) {
             const t = i / gridLines;
             const x = localX - halfWidth + t * cubeWidth;
-            addSeg(x, topY, localZ - halfDepth, x, topY, localZ + halfDepth);
+            addRibbon(new THREE.Vector3(x, topY, localZ - halfDepth), new THREE.Vector3(x, topY, localZ + halfDepth), topNormal);
             const z = localZ - halfDepth + t * cubeDepth;
-            addSeg(localX - halfWidth, topY, z, localX + halfWidth, topY, z);
+            addRibbon(new THREE.Vector3(localX - halfWidth, topY, z), new THREE.Vector3(localX + halfWidth, topY, z), topNormal);
         }
     } else {
-        // Sphere - draw latitude and longitude lines
-        const radius = gridDivisions * size * 0.6; // Sphere radius based on grid divisions
+        // Sphere
+        const radius = gridDivisions * size * 0.6;
         shapeCenterZ = backZ + radius;
-        // Center is already (0,0,0) relative to local        
         const latLines = gridDivisions;
         const lonLines = gridDivisions * 1.5;
 
-        const addSeg = (x1, y1, z1, x2, y2, z2) => {
-            addSketchySegment({ x: x1, y: y1, z: z1 }, { x: x2, y: y2, z: z2 });
+        // Helper to get radial normal
+        const getRadialNormal = (p) => {
+            return new THREE.Vector3(p.x - localX, p.y - localY, p.z - localZ).normalize();
         };
 
-        // Latitude lines (horizontal circles)
+        // Latitude lines
         for (let lat = 0; lat <= latLines; lat++) {
             const theta = (lat * Math.PI) / latLines;
             const sinTheta = Math.sin(theta);
@@ -423,19 +530,24 @@ function createShapeWalls(spacing, backZ) {
                 const phi1 = (lon * 2 * Math.PI) / lonLines;
                 const phi2 = ((lon + 1) * 2 * Math.PI) / lonLines;
 
-                const x1 = localX + radius * sinTheta * Math.cos(phi1);
-                const y1 = localY + radius * cosTheta;
-                const z1 = localZ + radius * sinTheta * Math.sin(phi1);
+                const p1 = new THREE.Vector3(
+                    localX + radius * sinTheta * Math.cos(phi1),
+                    localY + radius * cosTheta,
+                    localZ + radius * sinTheta * Math.sin(phi1)
+                );
+                const p2 = new THREE.Vector3(
+                    localX + radius * sinTheta * Math.cos(phi2),
+                    localY + radius * cosTheta,
+                    localZ + radius * sinTheta * Math.sin(phi2)
+                );
 
-                const x2 = localX + radius * sinTheta * Math.cos(phi2);
-                const y2 = localY + radius * cosTheta;
-                const z2 = localZ + radius * sinTheta * Math.sin(phi2);
-
-                addSeg(x1, y1, z1, x2, y2, z2);
+                // Use average normal for the segment
+                const mid = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
+                addRibbon(p1, p2, getRadialNormal(mid));
             }
         }
 
-        // Longitude lines (vertical circles)
+        // Longitude lines
         for (let lon = 0; lon < lonLines; lon++) {
             const phi = (lon * 2 * Math.PI) / lonLines;
 
@@ -443,15 +555,19 @@ function createShapeWalls(spacing, backZ) {
                 const theta1 = (lat * Math.PI) / latLines;
                 const theta2 = ((lat + 1) * Math.PI) / latLines;
 
-                const x1 = localX + radius * Math.sin(theta1) * Math.cos(phi);
-                const y1 = localY + radius * Math.cos(theta1);
-                const z1 = localZ + radius * Math.sin(theta1) * Math.sin(phi);
+                const p1 = new THREE.Vector3(
+                    localX + radius * Math.sin(theta1) * Math.cos(phi),
+                    localY + radius * Math.cos(theta1),
+                    localZ + radius * Math.sin(theta1) * Math.sin(phi)
+                );
+                const p2 = new THREE.Vector3(
+                    localX + radius * Math.sin(theta2) * Math.cos(phi),
+                    localY + radius * Math.cos(theta2),
+                    localZ + radius * Math.sin(theta2) * Math.sin(phi)
+                );
 
-                const x2 = localX + radius * Math.sin(theta2) * Math.cos(phi);
-                const y2 = localY + radius * Math.cos(theta2);
-                const z2 = localZ + radius * Math.sin(theta2) * Math.sin(phi);
-
-                addSeg(x1, y1, z1, x2, y2, z2);
+                const mid = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
+                addRibbon(p1, p2, getRadialNormal(mid));
             }
         }
     }
@@ -460,17 +576,17 @@ function createShapeWalls(spacing, backZ) {
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
         geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-        const lines = new THREE.LineSegments(geometry, material);
+        geometry.setAttribute('alpha', new THREE.Float32BufferAttribute(alphas, 1));
+        geometry.setIndex(indices);
 
-        // Position the object at the calculated center
-        lines.position.set(shapeCenterX, shapeCenterY, shapeCenterZ);
+        const mesh = new THREE.Mesh(geometry, material);
 
-        // Apply rotation (now rotates around the object's center)
-        lines.rotation.x = config.rotationX * Math.PI / 180;
-        lines.rotation.y = config.rotationY * Math.PI / 180;
-        lines.rotation.z = config.rotationZ * Math.PI / 180;
+        mesh.position.set(shapeCenterX, shapeCenterY, shapeCenterZ);
+        mesh.rotation.x = config.rotationX * Math.PI / 180;
+        mesh.rotation.y = config.rotationY * Math.PI / 180;
+        mesh.rotation.z = config.rotationZ * Math.PI / 180;
 
-        group.add(lines);
+        group.add(mesh);
     }
 
     return group;
@@ -674,13 +790,13 @@ function updateVisualization() {
     // Pass gridSize instead of config.gridDensity to createGrid if it uses it?
     // createGrid uses config.gridDensity. We need to update createGrid to accept dimensions or infer them.
     // Let's modify createGrid to infer dimensions from the points array.
-    const frontGrid = createGrid(frontPoints, 0x333333, config.drapeOpacity, config.lineThickness, null);
+    const frontGrid = createGrid(frontPoints, 0x333333, config.drapeOpacity, config.drapeLineWidth, null);
     frontGridGroup.add(frontGrid);
 
     // Render back grid (flat floor grid)
     if (config.showBackGrid) {
         // Darker color and higher opacity for better visibility
-        const backGrid = createGrid(backPoints, 0x888888, config.backGridOpacity, config.lineThickness * 0.5, null);
+        const backGrid = createGrid(backPoints, 0x888888, config.backGridOpacity, config.backGridLineWidth, null);
         backGridGroup.add(backGrid);
     }
 
@@ -723,7 +839,11 @@ function initializeUI() {
     appearanceFolder.add(config, 'drapeOpacity', 0, 1, 0.1).name('Drape Opacity').onChange(updateVisualization);
     appearanceFolder.add(config, 'shapeOpacity', 0, 1, 0.1).name('Shape Opacity').onChange(updateVisualization);
     appearanceFolder.add(config, 'backGridOpacity', 0, 1, 0.1).name('Back Grid Opacity').onChange(updateVisualization);
-    appearanceFolder.add(config, 'lineThickness', 0.5, 5, 0.5).name('Line Thickness').onChange(updateVisualization);
+
+    appearanceFolder.add(config, 'drapeLineWidth', 0.5, 5, 0.1).name('Drape Width').onChange(updateVisualization);
+    appearanceFolder.add(config, 'shapeLineWidth', 0.5, 5, 0.1).name('Shape Width').onChange(updateVisualization);
+    appearanceFolder.add(config, 'backGridLineWidth', 0.5, 5, 0.1).name('Back Grid Width').onChange(updateVisualization);
+
     appearanceFolder.open();
 
     // Rotation folder
