@@ -155,16 +155,57 @@ function updateColliderMesh(spacing, backZ) {
 // Create grid with smooth lines
 function createGrid(points, color, opacity, lineWidth = 1, cullBelowZ = null) {
     const group = new THREE.Group();
+
+    // Use vertex colors for the fading/pressure effect
     const material = new THREE.LineBasicMaterial({
-        color: color,
+        vertexColors: true, // Enable vertex colors
         transparent: true,
         opacity: opacity,
         linewidth: lineWidth
     });
 
     const vertices = [];
+    const colors = [];
     const width = points.length;
     const height = points[0].length;
+
+    // Pencil effect parameters
+    const JITTER_AMOUNT = 1.5; // Max offset in units
+    const PASSES = 2; // Draw each line twice
+    const BASE_COLOR = new THREE.Color(color);
+    const BG_COLOR = new THREE.Color(0xf8f9fa); // Match scene background
+
+    // Helper to add a sketchy line segment
+    const addSketchySegment = (p1, p2) => {
+        for (let k = 0; k < PASSES; k++) {
+            // Randomly skip some segments for "gaps"
+            if (Math.random() > 0.9) continue;
+
+            // Calculate pressure (opacity/darkness)
+            const pressure = 0.3 + Math.random() * 0.7;
+
+            // Mix color based on pressure
+            const segmentColor = BASE_COLOR.clone().lerp(BG_COLOR, 1 - pressure);
+
+            // Add jitter to start and end points
+            const j1 = {
+                x: p1.x + (Math.random() - 0.5) * JITTER_AMOUNT,
+                y: p1.y + (Math.random() - 0.5) * JITTER_AMOUNT,
+                z: p1.z + (Math.random() - 0.5) * JITTER_AMOUNT * 0.2 // Less Z jitter
+            };
+            const j2 = {
+                x: p2.x + (Math.random() - 0.5) * JITTER_AMOUNT,
+                y: p2.y + (Math.random() - 0.5) * JITTER_AMOUNT,
+                z: p2.z + (Math.random() - 0.5) * JITTER_AMOUNT * 0.2
+            };
+
+            vertices.push(j1.x, j1.y, j1.z);
+            vertices.push(j2.x, j2.y, j2.z);
+
+            colors.push(segmentColor.r, segmentColor.g, segmentColor.b);
+            colors.push(segmentColor.r, segmentColor.g, segmentColor.b);
+        }
+    };
 
     // Helper to check if point is significantly elevated
     const isShapePoint = (p) => {
@@ -180,8 +221,7 @@ function createGrid(points, color, opacity, lineWidth = 1, cullBelowZ = null) {
 
             // Only draw if BOTH points are part of the elevated shape
             if (isShapePoint(p1) && isShapePoint(p2)) {
-                vertices.push(p1.x, p1.y, p1.z);
-                vertices.push(p2.x, p2.y, p2.z);
+                addSketchySegment(p1, p2);
             }
         }
     }
@@ -193,8 +233,7 @@ function createGrid(points, color, opacity, lineWidth = 1, cullBelowZ = null) {
             const p2 = points[i][j + 1];
 
             if (isShapePoint(p1) && isShapePoint(p2)) {
-                vertices.push(p1.x, p1.y, p1.z);
-                vertices.push(p2.x, p2.y, p2.z);
+                addSketchySegment(p1, p2);
             }
         }
     }
@@ -202,6 +241,7 @@ function createGrid(points, color, opacity, lineWidth = 1, cullBelowZ = null) {
     if (vertices.length > 0) {
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
         const lines = new THREE.LineSegments(geometry, material);
         group.add(lines);
     }
@@ -216,7 +256,7 @@ function createShapeWalls(spacing, backZ) {
     const clippingPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -backZ);
 
     const material = new THREE.LineBasicMaterial({
-        color: 0x333333,  // Dark grey to match drape grid
+        vertexColors: true, // Enable vertex colors
         transparent: true,
         opacity: config.shapeOpacity, // Use specific shape opacity
         linewidth: config.lineThickness,
@@ -224,6 +264,41 @@ function createShapeWalls(spacing, backZ) {
     });
 
     const vertices = [];
+    const colors = [];
+
+    // Pencil effect parameters
+    const JITTER_AMOUNT = 1.5;
+    const PASSES = 2;
+    const BASE_COLOR = new THREE.Color(0x333333);
+    const BG_COLOR = new THREE.Color(0xf8f9fa);
+
+    // Helper to add a sketchy line segment
+    const addSketchySegment = (p1, p2) => {
+        for (let k = 0; k < PASSES; k++) {
+            if (Math.random() > 0.9) continue;
+
+            const pressure = 0.3 + Math.random() * 0.7;
+            const segmentColor = BASE_COLOR.clone().lerp(BG_COLOR, 1 - pressure);
+
+            const j1 = {
+                x: p1.x + (Math.random() - 0.5) * JITTER_AMOUNT,
+                y: p1.y + (Math.random() - 0.5) * JITTER_AMOUNT,
+                z: p1.z + (Math.random() - 0.5) * JITTER_AMOUNT * 0.2
+            };
+            const j2 = {
+                x: p2.x + (Math.random() - 0.5) * JITTER_AMOUNT,
+                y: p2.y + (Math.random() - 0.5) * JITTER_AMOUNT,
+                z: p2.z + (Math.random() - 0.5) * JITTER_AMOUNT * 0.2
+            };
+
+            vertices.push(j1.x, j1.y, j1.z);
+            vertices.push(j2.x, j2.y, j2.z);
+
+            colors.push(segmentColor.r, segmentColor.g, segmentColor.b);
+            colors.push(segmentColor.r, segmentColor.g, segmentColor.b);
+        }
+    };
+
     // cubeSize now controls the number of grid divisions, not the physical size
     // Physical size is determined by spacing to match the main grid
     const gridDivisions = config.cubeSize; // Use cubeSize for grid divisions
@@ -260,18 +335,21 @@ function createShapeWalls(spacing, backZ) {
         // Draw grid on each face of the cube
         const gridLines = gridDivisions; // Number of grid divisions per face
 
+        // Helper to add segment from coords
+        const addSeg = (x1, y1, z1, x2, y2, z2) => {
+            addSketchySegment({ x: x1, y: y1, z: z1 }, { x: x2, y: y2, z: z2 });
+        };
+
         // Front face (Z = localZ + halfDepth)
         const frontZ = localZ + halfDepth;
         for (let i = 0; i <= gridLines; i++) {
             const t = i / gridLines;
             // Horizontal lines
             const y = localY - halfHeight + t * cubeHeight;
-            vertices.push(localX - halfWidth, y, frontZ);
-            vertices.push(localX + halfWidth, y, frontZ);
+            addSeg(localX - halfWidth, y, frontZ, localX + halfWidth, y, frontZ);
             // Vertical lines
             const x = localX - halfWidth + t * cubeWidth;
-            vertices.push(x, localY - halfHeight, frontZ);
-            vertices.push(x, localY + halfHeight, frontZ);
+            addSeg(x, localY - halfHeight, frontZ, x, localY + halfHeight, frontZ);
         }
 
         // Back face (Z = localZ - halfDepth)
@@ -279,11 +357,9 @@ function createShapeWalls(spacing, backZ) {
         for (let i = 0; i <= gridLines; i++) {
             const t = i / gridLines;
             const y = localY - halfHeight + t * cubeHeight;
-            vertices.push(localX - halfWidth, y, backFaceZ);
-            vertices.push(localX + halfWidth, y, backFaceZ);
+            addSeg(localX - halfWidth, y, backFaceZ, localX + halfWidth, y, backFaceZ);
             const x = localX - halfWidth + t * cubeWidth;
-            vertices.push(x, localY - halfHeight, backFaceZ);
-            vertices.push(x, localY + halfHeight, backFaceZ);
+            addSeg(x, localY - halfHeight, backFaceZ, x, localY + halfHeight, backFaceZ);
         }
 
         // Left face (X = localX - halfWidth)
@@ -291,11 +367,9 @@ function createShapeWalls(spacing, backZ) {
         for (let i = 0; i <= gridLines; i++) {
             const t = i / gridLines;
             const y = localY - halfHeight + t * cubeHeight;
-            vertices.push(leftX, y, localZ - halfDepth);
-            vertices.push(leftX, y, localZ + halfDepth);
+            addSeg(leftX, y, localZ - halfDepth, leftX, y, localZ + halfDepth);
             const z = localZ - halfDepth + t * cubeDepth;
-            vertices.push(leftX, localY - halfHeight, z);
-            vertices.push(leftX, localY + halfHeight, z);
+            addSeg(leftX, localY - halfHeight, z, leftX, localY + halfHeight, z);
         }
 
         // Right face (X = localX + halfWidth)
@@ -303,11 +377,9 @@ function createShapeWalls(spacing, backZ) {
         for (let i = 0; i <= gridLines; i++) {
             const t = i / gridLines;
             const y = localY - halfHeight + t * cubeHeight;
-            vertices.push(rightX, y, localZ - halfDepth);
-            vertices.push(rightX, y, localZ + halfDepth);
+            addSeg(rightX, y, localZ - halfDepth, rightX, y, localZ + halfDepth);
             const z = localZ - halfDepth + t * cubeDepth;
-            vertices.push(rightX, localY - halfHeight, z);
-            vertices.push(rightX, localY + halfHeight, z);
+            addSeg(rightX, localY - halfHeight, z, rightX, localY + halfHeight, z);
         }
 
         // Bottom face (Y = localY - halfHeight)
@@ -315,11 +387,9 @@ function createShapeWalls(spacing, backZ) {
         for (let i = 0; i <= gridLines; i++) {
             const t = i / gridLines;
             const x = localX - halfWidth + t * cubeWidth;
-            vertices.push(x, bottomY, localZ - halfDepth);
-            vertices.push(x, bottomY, localZ + halfDepth);
+            addSeg(x, bottomY, localZ - halfDepth, x, bottomY, localZ + halfDepth);
             const z = localZ - halfDepth + t * cubeDepth;
-            vertices.push(localX - halfWidth, bottomY, z);
-            vertices.push(localX + halfWidth, bottomY, z);
+            addSeg(localX - halfWidth, bottomY, z, localX + halfWidth, bottomY, z);
         }
 
         // Top face (Y = localY + halfHeight)
@@ -327,11 +397,9 @@ function createShapeWalls(spacing, backZ) {
         for (let i = 0; i <= gridLines; i++) {
             const t = i / gridLines;
             const x = localX - halfWidth + t * cubeWidth;
-            vertices.push(x, topY, localZ - halfDepth);
-            vertices.push(x, topY, localZ + halfDepth);
+            addSeg(x, topY, localZ - halfDepth, x, topY, localZ + halfDepth);
             const z = localZ - halfDepth + t * cubeDepth;
-            vertices.push(localX - halfWidth, topY, z);
-            vertices.push(localX + halfWidth, topY, z);
+            addSeg(localX - halfWidth, topY, z, localX + halfWidth, topY, z);
         }
     } else {
         // Sphere - draw latitude and longitude lines
@@ -340,6 +408,10 @@ function createShapeWalls(spacing, backZ) {
         // Center is already (0,0,0) relative to local        
         const latLines = gridDivisions;
         const lonLines = gridDivisions * 1.5;
+
+        const addSeg = (x1, y1, z1, x2, y2, z2) => {
+            addSketchySegment({ x: x1, y: y1, z: z1 }, { x: x2, y: y2, z: z2 });
+        };
 
         // Latitude lines (horizontal circles)
         for (let lat = 0; lat <= latLines; lat++) {
@@ -359,8 +431,7 @@ function createShapeWalls(spacing, backZ) {
                 const y2 = localY + radius * cosTheta;
                 const z2 = localZ + radius * sinTheta * Math.sin(phi2);
 
-                vertices.push(x1, y1, z1);
-                vertices.push(x2, y2, z2);
+                addSeg(x1, y1, z1, x2, y2, z2);
             }
         }
 
@@ -380,8 +451,7 @@ function createShapeWalls(spacing, backZ) {
                 const y2 = localY + radius * Math.cos(theta2);
                 const z2 = localZ + radius * Math.sin(theta2) * Math.sin(phi);
 
-                vertices.push(x1, y1, z1);
-                vertices.push(x2, y2, z2);
+                addSeg(x1, y1, z1, x2, y2, z2);
             }
         }
     }
@@ -389,6 +459,7 @@ function createShapeWalls(spacing, backZ) {
     if (vertices.length > 0) {
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
         const lines = new THREE.LineSegments(geometry, material);
 
         // Position the object at the calculated center
