@@ -105,6 +105,57 @@ function animate() {
     renderer.render(scene, camera);
 }
 
+// Calculate grid alignment offset based on rotation
+// This ensures the cube's bottom face aligns with the grid pattern
+function calculateGridAlignmentOffset(spacing) {
+    if (config.shapeType !== 'cube') {
+        return { x: 0, y: 0, z: 0 }; // Only align cubes for now
+    }
+
+    const cubeSize = config.cubeSize * spacing;
+    const halfSize = cubeSize / 2;
+
+    // Define the 8 corners of the cube in local space
+    const corners = [
+        new THREE.Vector3(-halfSize, -halfSize, -halfSize),
+        new THREE.Vector3(halfSize, -halfSize, -halfSize),
+        new THREE.Vector3(-halfSize, halfSize, -halfSize),
+        new THREE.Vector3(halfSize, halfSize, -halfSize),
+        new THREE.Vector3(-halfSize, -halfSize, halfSize),
+        new THREE.Vector3(halfSize, -halfSize, halfSize),
+        new THREE.Vector3(-halfSize, halfSize, halfSize),
+        new THREE.Vector3(halfSize, halfSize, halfSize)
+    ];
+
+    // Create rotation matrix
+    const rotationMatrix = new THREE.Matrix4();
+    rotationMatrix.makeRotationFromEuler(new THREE.Euler(
+        config.rotationX * Math.PI / 180,
+        config.rotationY * Math.PI / 180,
+        config.rotationZ * Math.PI / 180,
+        'XYZ'
+    ));
+
+    // Apply rotation to all corners
+    const rotatedCorners = corners.map(corner => corner.clone().applyMatrix4(rotationMatrix));
+
+    // Find the lowest corner (minimum Z)
+    let lowestCorner = rotatedCorners[0];
+    for (let i = 1; i < rotatedCorners.length; i++) {
+        if (rotatedCorners[i].z < lowestCorner.z) {
+            lowestCorner = rotatedCorners[i];
+        }
+    }
+
+    // Calculate offset to snap the lowest corner to the grid
+    // We want the lowest corner's X and Y to align with grid points
+    const offsetX = Math.round(lowestCorner.x / spacing) * spacing - lowestCorner.x;
+    const offsetY = Math.round(lowestCorner.y / spacing) * spacing - lowestCorner.y;
+    const offsetZ = -lowestCorner.z; // Move so lowest point is at z=0 relative to cube center
+
+    return { x: offsetX, y: offsetY, z: offsetZ };
+}
+
 // Update the hidden collider mesh based on config
 function updateColliderMesh(spacing, backZ) {
     if (colliderMesh) {
@@ -129,20 +180,23 @@ function updateColliderMesh(spacing, backZ) {
     const material = new THREE.MeshBasicMaterial({ visible: false }); // Invisible
     colliderMesh = new THREE.Mesh(geometry, material);
 
+    // Calculate grid alignment offset
+    const alignmentOffset = calculateGridAlignmentOffset(spacing);
+
     // Position
     // cubeX and cubeY are now relative to center (0,0)
-    const x = config.cubeX * spacing;
-    const y = config.cubeY * spacing;
+    const x = config.cubeX * spacing + alignmentOffset.x;
+    const y = config.cubeY * spacing + alignmentOffset.y;
 
     // Rotation (convert degrees to radians)
     colliderMesh.rotation.x = config.rotationX * Math.PI / 180;
     colliderMesh.rotation.y = config.rotationY * Math.PI / 180;
     colliderMesh.rotation.z = config.rotationZ * Math.PI / 180;
 
-    // Position - center of cube
+    // Position - center of cube with alignment offset
     const cubeDepth = config.cubeSize * spacing;
     if (config.shapeType === 'cube') {
-        colliderMesh.position.set(x, y, backZ + cubeDepth / 2);
+        colliderMesh.position.set(x, y, backZ + cubeDepth / 2 + alignmentOffset.z);
     } else {
         // For sphere, its center is at backZ + radius
         const radius = config.cubeSize * spacing * 0.6;
@@ -449,13 +503,16 @@ function createShapeWalls(spacing, backZ) {
     const gridDivisions = config.cubeSize;
     const size = spacing;
 
-    const shapeCenterX = config.cubeX * spacing;
-    const shapeCenterY = config.cubeY * spacing;
+    // Calculate grid alignment offset
+    const alignmentOffset = calculateGridAlignmentOffset(spacing);
+
+    const shapeCenterX = config.cubeX * spacing + alignmentOffset.x;
+    const shapeCenterY = config.cubeY * spacing + alignmentOffset.y;
     let shapeCenterZ;
 
     if (config.shapeType === 'cube') {
         const cubeDepth = gridDivisions * size;
-        shapeCenterZ = backZ + cubeDepth / 2;
+        shapeCenterZ = backZ + cubeDepth / 2 + alignmentOffset.z;
     } else {
         shapeCenterZ = backZ + gridDivisions * size * 0.6;
     }
@@ -638,10 +695,11 @@ function updateVisualization() {
     // Viewport coverage configuration
     const VIEWPORT_SIZE = 1500; // Grid coverage area
 
-    // Calculate grid size (number of cells) to cover the viewport
-    // Force it to be ODD to match the shape's alignment (which has odd divisions)
+    // Calculate grid size (number of lines - 1) to cover the viewport
+    // We need gridSize to be EVEN so that gridSize+1 (number of lines) is ODD
+    // This ensures proper centering at (0,0) with a center line
     let gridSize = Math.ceil(VIEWPORT_SIZE / spacing);
-    if (gridSize % 2 === 0) gridSize++;
+    if (gridSize % 2 === 1) gridSize++; // Make it even so we get odd number of lines
 
     // Update the invisible collider mesh
     updateColliderMesh(spacing, backZ);
