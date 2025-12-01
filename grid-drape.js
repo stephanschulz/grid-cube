@@ -207,6 +207,14 @@ function updateColliderMesh(spacing, backZ) {
     scene.add(colliderMesh);
 }
 
+// Deterministic random function based on position
+// This ensures the same position always gets the same "random" value
+function seededRandom(x, y, z, seed = 0) {
+    // Hash the coordinates to get a pseudo-random value
+    const hash = ((x * 73856093) ^ (y * 19349663) ^ (z * 83492791) ^ seed) >>> 0;
+    return (hash / 4294967296.0); // Convert to 0-1 range
+}
+
 // Custom ShaderMaterial for Sketchy Lines
 // Supports vertex colors with alpha and varying thickness (via mesh)
 const SketchMaterial = new THREE.ShaderMaterial({
@@ -288,12 +296,12 @@ function createSketchyGridMesh(points, color, opacity, baseWidth, cullBelowZ = n
             const noise2_high = Math.sin(pos2.x * 0.3 + 41.2) * Math.cos(pos2.y * 0.3 + 53.8) * Math.sin(pos2.z * 0.3 + 67.4);
             const noise2 = (noise2_low * 0.5 + noise2_mid * 0.3 + noise2_high * 0.2);
 
-            // Add per-segment random variation
-            const segmentRandom1 = (Math.random() - 0.5) * 0.4;
-            const segmentRandom2 = (Math.random() - 0.5) * 0.4;
+            // Add per-segment random variation (deterministic based on position)
+            const segmentRandom1 = (seededRandom(pos1.x, pos1.y, pos1.z, 1000) - 0.5) * 0.4;
+            const segmentRandom2 = (seededRandom(pos2.x, pos2.y, pos2.z, 1000) - 0.5) * 0.4;
 
-            const w1 = baseWidth * (0.6 + 0.4 * Math.abs(noise1) + segmentRandom1 + Math.random() * 0.3);
-            const w2 = baseWidth * (0.6 + 0.4 * Math.abs(noise2) + segmentRandom2 + Math.random() * 0.3);
+            const w1 = baseWidth * (0.6 + 0.4 * Math.abs(noise1) + segmentRandom1 + seededRandom(pos1.x, pos1.y, pos1.z, 2000) * 0.3);
+            const w2 = baseWidth * (0.6 + 0.4 * Math.abs(noise2) + segmentRandom2 + seededRandom(pos2.x, pos2.y, pos2.z, 2000) * 0.3);
 
             const a1 = 0.5 + 0.4 * Math.abs(noise1) + segmentRandom1 * 0.5;
             const a2 = 0.5 + 0.4 * Math.abs(noise2) + segmentRandom2 * 0.5;
@@ -467,11 +475,11 @@ function createShapeWalls(spacing, backZ) {
             const noise2_high = Math.sin(pos2.x * 0.3 + 41.2) * Math.cos(pos2.y * 0.3 + 53.8) * Math.sin(pos2.z * 0.3 + 67.4);
             const noise2 = (noise2_low * 0.5 + noise2_mid * 0.3 + noise2_high * 0.2);
 
-            const segmentRandom1 = (Math.random() - 0.5) * 0.4;
-            const segmentRandom2 = (Math.random() - 0.5) * 0.4;
+            const segmentRandom1 = (seededRandom(pos1.x, pos1.y, pos1.z, 3000) - 0.5) * 0.4;
+            const segmentRandom2 = (seededRandom(pos2.x, pos2.y, pos2.z, 3000) - 0.5) * 0.4;
 
-            const w1 = baseWidth * (0.6 + 0.4 * Math.abs(noise1) + segmentRandom1 + Math.random() * 0.3);
-            const w2 = baseWidth * (0.6 + 0.4 * Math.abs(noise2) + segmentRandom2 + Math.random() * 0.3);
+            const w1 = baseWidth * (0.6 + 0.4 * Math.abs(noise1) + segmentRandom1 + seededRandom(pos1.x, pos1.y, pos1.z, 4000) * 0.3);
+            const w2 = baseWidth * (0.6 + 0.4 * Math.abs(noise2) + segmentRandom2 + seededRandom(pos2.x, pos2.y, pos2.z, 4000) * 0.3);
 
             const a1 = 0.5 + 0.4 * Math.abs(noise1) + segmentRandom1 * 0.5;
             const a2 = 0.5 + 0.4 * Math.abs(noise2) + segmentRandom2 * 0.5;
