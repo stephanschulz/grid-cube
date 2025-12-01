@@ -222,18 +222,27 @@ function createSketchyGridMesh(points, color, opacity, baseWidth, cullBelowZ = n
             const pos1 = new THREE.Vector3().lerpVectors(p1, p2, t1);
             const pos2 = new THREE.Vector3().lerpVectors(p1, p2, t2);
 
-            // Variable thickness and opacity
-            // Use noise-like randomness based on position
-            // Variable thickness and opacity
-            // Use noise-like randomness based on position
-            const noise1 = Math.sin(pos1.x * 0.1) * Math.cos(pos1.y * 0.1) * Math.sin(pos1.z * 0.1);
-            const noise2 = Math.sin(pos2.x * 0.1) * Math.cos(pos2.y * 0.1) * Math.sin(pos2.z * 0.1);
+            // Multi-octave noise for more natural pencil variation
+            // Combine multiple frequencies to break up repetition
+            const noise1_low = Math.sin(pos1.x * 0.05) * Math.cos(pos1.y * 0.05) * Math.sin(pos1.z * 0.05);
+            const noise1_mid = Math.sin(pos1.x * 0.15 + 17.3) * Math.cos(pos1.y * 0.15 + 23.7) * Math.sin(pos1.z * 0.15 + 31.1);
+            const noise1_high = Math.sin(pos1.x * 0.3 + 41.2) * Math.cos(pos1.y * 0.3 + 53.8) * Math.sin(pos1.z * 0.3 + 67.4);
+            const noise1 = (noise1_low * 0.5 + noise1_mid * 0.3 + noise1_high * 0.2);
 
-            const w1 = baseWidth * (0.5 + 0.5 * Math.abs(noise1) + 0.5 * Math.random());
-            const w2 = baseWidth * (0.5 + 0.5 * Math.abs(noise2) + 0.5 * Math.random());
+            const noise2_low = Math.sin(pos2.x * 0.05) * Math.cos(pos2.y * 0.05) * Math.sin(pos2.z * 0.05);
+            const noise2_mid = Math.sin(pos2.x * 0.15 + 17.3) * Math.cos(pos2.y * 0.15 + 23.7) * Math.sin(pos2.z * 0.15 + 31.1);
+            const noise2_high = Math.sin(pos2.x * 0.3 + 41.2) * Math.cos(pos2.y * 0.3 + 53.8) * Math.sin(pos2.z * 0.3 + 67.4);
+            const noise2 = (noise2_low * 0.5 + noise2_mid * 0.3 + noise2_high * 0.2);
 
-            const a1 = 0.4 + 0.6 * Math.abs(noise1); // Opacity 0.4 - 1.0
-            const a2 = 0.4 + 0.6 * Math.abs(noise2);
+            // Add per-segment random variation
+            const segmentRandom1 = (Math.random() - 0.5) * 0.4;
+            const segmentRandom2 = (Math.random() - 0.5) * 0.4;
+
+            const w1 = baseWidth * (0.6 + 0.4 * Math.abs(noise1) + segmentRandom1 + Math.random() * 0.3);
+            const w2 = baseWidth * (0.6 + 0.4 * Math.abs(noise2) + segmentRandom2 + Math.random() * 0.3);
+
+            const a1 = 0.5 + 0.4 * Math.abs(noise1) + segmentRandom1 * 0.5;
+            const a2 = 0.5 + 0.4 * Math.abs(noise2) + segmentRandom2 * 0.5;
 
             // Vertices for the quad (strip)
             // v1 --- v2
@@ -393,14 +402,25 @@ function createShapeWalls(spacing, backZ) {
             const pos1 = new THREE.Vector3().lerpVectors(p1, p2, t1);
             const pos2 = new THREE.Vector3().lerpVectors(p1, p2, t2);
 
-            const noise1 = Math.sin(pos1.x * 0.1) * Math.cos(pos1.y * 0.1) * Math.sin(pos1.z * 0.1);
-            const noise2 = Math.sin(pos2.x * 0.1) * Math.cos(pos2.y * 0.1) * Math.sin(pos2.z * 0.1);
+            // Multi-octave noise for shape walls
+            const noise1_low = Math.sin(pos1.x * 0.05) * Math.cos(pos1.y * 0.05) * Math.sin(pos1.z * 0.05);
+            const noise1_mid = Math.sin(pos1.x * 0.15 + 17.3) * Math.cos(pos1.y * 0.15 + 23.7) * Math.sin(pos1.z * 0.15 + 31.1);
+            const noise1_high = Math.sin(pos1.x * 0.3 + 41.2) * Math.cos(pos1.y * 0.3 + 53.8) * Math.sin(pos1.z * 0.3 + 67.4);
+            const noise1 = (noise1_low * 0.5 + noise1_mid * 0.3 + noise1_high * 0.2);
 
-            const w1 = baseWidth * (0.5 + 0.5 * Math.abs(noise1) + 0.5 * Math.random());
-            const w2 = baseWidth * (0.5 + 0.5 * Math.abs(noise2) + 0.5 * Math.random());
+            const noise2_low = Math.sin(pos2.x * 0.05) * Math.cos(pos2.y * 0.05) * Math.sin(pos2.z * 0.05);
+            const noise2_mid = Math.sin(pos2.x * 0.15 + 17.3) * Math.cos(pos2.y * 0.15 + 23.7) * Math.sin(pos2.z * 0.15 + 31.1);
+            const noise2_high = Math.sin(pos2.x * 0.3 + 41.2) * Math.cos(pos2.y * 0.3 + 53.8) * Math.sin(pos2.z * 0.3 + 67.4);
+            const noise2 = (noise2_low * 0.5 + noise2_mid * 0.3 + noise2_high * 0.2);
 
-            const a1 = 0.4 + 0.6 * Math.abs(noise1);
-            const a2 = 0.4 + 0.6 * Math.abs(noise2);
+            const segmentRandom1 = (Math.random() - 0.5) * 0.4;
+            const segmentRandom2 = (Math.random() - 0.5) * 0.4;
+
+            const w1 = baseWidth * (0.6 + 0.4 * Math.abs(noise1) + segmentRandom1 + Math.random() * 0.3);
+            const w2 = baseWidth * (0.6 + 0.4 * Math.abs(noise2) + segmentRandom2 + Math.random() * 0.3);
+
+            const a1 = 0.5 + 0.4 * Math.abs(noise1) + segmentRandom1 * 0.5;
+            const a2 = 0.5 + 0.4 * Math.abs(noise2) + segmentRandom2 * 0.5;
 
             const v1 = pos1.clone().addScaledVector(side, w1 / 2);
             const v3 = pos1.clone().addScaledVector(side, -w1 / 2);
